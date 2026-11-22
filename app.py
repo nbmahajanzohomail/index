@@ -1287,6 +1287,15 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     global ACTIVE_PORT
     init_db()
+    # Mark the automatic Drive restore as running before the server accepts page
+    # requests. Otherwise the first hosted /api/state request can see an empty
+    # database and a non-running job, leaving the browser with nothing to poll.
+    if HOSTED and cloud_runtime.drive_file_id():
+        with connect() as c:
+            empty = c.execute('SELECT COUNT(*) FROM index_bars').fetchone()[0] == 0
+        if empty:
+            start_job(lambda: cloud_runtime.refresh_drive(sys.modules[__name__]),
+                      message='Loading the saved market data from Google Drive…', kind='cloud_refresh')
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     ACTIVE_PORT = server.server_address[1]
     url = f'http://127.0.0.1:{ACTIVE_PORT}'
@@ -1303,12 +1312,6 @@ def main():
         print('Dashboard health check: passed.', flush=True)
         if not HOSTED and '--no-browser' not in sys.argv:
             webbrowser.open(url)
-        if HOSTED and cloud_runtime.drive_file_id():
-            with connect() as c:
-                empty = c.execute('SELECT COUNT(*) FROM index_bars').fetchone()[0] == 0
-            if empty:
-                start_job(lambda: cloud_runtime.refresh_drive(sys.modules[__name__]),
-                          message='Loading the saved Google Drive market file…', kind='cloud_refresh')
         server_thread.join()
     except KeyboardInterrupt:
         pass

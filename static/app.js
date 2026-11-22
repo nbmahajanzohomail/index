@@ -141,9 +141,11 @@ function render() {
   renderCoverage(state.coverage, state.database);
   renderFiles(state.files);
   renderCloud(state.cloud || {}, state.job || {});
-  $('research-date-status').textContent = state.counts.index_bars
-    ? `Showing stored market rows on or before ${state.as_of}; later rows are excluded.`
-    : `No index history is stored on or before ${state.as_of}. Import reports from Data centre.`;
+  $('research-date-status').textContent = startupDriveRestorePending()
+    ? 'Restoring the saved index data from Google Drive…'
+    : state.counts.index_bars
+      ? `Showing stored market rows on or before ${state.as_of}; later rows are excluded.`
+      : `No index history is stored on or before ${state.as_of}. Import reports from Data centre.`;
   renderJob(state.job);
   enableSortableTables();
 }
@@ -337,9 +339,15 @@ function renderCoverage(coverage, database) {
   $('gaps').textContent = `Last NSE F&O report processed: ${lastDayFor('nse_fo')} · Last BSE F&O report processed: ${lastDayFor('bse_fo')}. The database stores only the seven selected indices; source filenames and date coverage are listed below.`;
 }
 
+function startupDriveRestorePending(cloud = state?.cloud, job = state?.job) {
+  const restoreFailed = job?.kind === 'cloud_refresh' && job.error && !job.running;
+  return hosted && !!cloud?.drive_configured && !state?.coverage?.indexes?.rows && !restoreFailed;
+}
+
 function renderCloud(cloud, job) {
   const running = !!job.running;
   const hostedCopy = !!cloud.hosted;
+  const restorePending = hostedCopy && startupDriveRestorePending(cloud, job);
   $('workspace-mode').textContent = hostedCopy ? 'HOSTED COPY' : 'LOCAL MASTER';
   $('cloud-signout').hidden = !hostedCopy;
   $('cloud-refresh-button').hidden = !hostedCopy;
@@ -353,7 +361,7 @@ function renderCloud(cloud, job) {
   $('cloud-export-button').disabled = running || !cloud.analysis_ready || !!cloud.missing_underlyings?.length;
   $('cloud-file-button').disabled = running || !cloud.export_ready;
   $('cloud-file-button').textContent = cloud.export_ready ? `Download prepared market file (${cloud.export_mb} MB)` : 'Download prepared market file';
-  $('cloud-refresh-button').disabled = running || !cloud.drive_configured;
+  $('cloud-refresh-button').disabled = running || restorePending || !cloud.drive_configured;
   const badge = $('cloud-state-badge');
   if (hostedCopy) {
     const driveLoadFailed = job.kind === 'cloud_refresh' && job.error;
@@ -363,13 +371,15 @@ function renderCloud(cloud, job) {
           : job.kind === 'cloud_refresh' ? 'LOADING FROM DRIVE' : 'TASK RUNNING';
     badge.textContent = running ? taskLabel
       : driveLoadFailed ? 'DRIVE LOAD FAILED'
+      : restorePending ? 'LOADING FROM DRIVE'
       : cloud.export_ready ? 'DRIVE FILE READY'
         : cloud.saved_through ? 'DRIVE COPY LOADED'
           : cloud.drive_configured ? 'WAITING FOR DRIVE' : 'DRIVE SETUP NEEDED';
-    badge.className = `state-badge ${running && job.kind === 'cloud_refresh' ? 'loading' : driveLoadFailed ? 'down' : cloud.export_ready || cloud.saved_through ? 'up' : ''}`;
+    badge.className = `state-badge ${(running && job.kind === 'cloud_refresh') || restorePending ? 'loading' : driveLoadFailed ? 'down' : cloud.export_ready || cloud.saved_through ? 'up' : ''}`;
     $('cloud-status').textContent = running
       ? (job.message || 'The hosted data task is running…')
       : driveLoadFailed ? ((job.log || []).at(-1) || 'Could not load the saved Google Drive copy.')
+      : restorePending ? 'Restoring the saved market data from Google Drive. This page will refresh as soon as loading finishes.'
       : cloud.export_ready
         ? `A checked, index-only market file is ready${cloud.last_export_through ? ` through ${cloud.last_export_through}` : ''}. Download it, upload it to the same separate Drive file, then load the saved copy here.`
         : cloud.missing_underlyings?.length
@@ -607,23 +617,24 @@ function renderHistoryChart(historyRows) {
 }
 
 function renderJob(job = {}) {
-  $('task-panel').hidden = !job.running && !(job.log || []).length;
-  $('task-label').textContent = job.message || 'Waiting for a download';
-  $('task-badge').textContent = job.running ? 'WORKING' : job.error ? 'NEEDS ATTENTION' : 'FINISHED';
-  $('task-badge').className = `state-badge ${job.running ? 'up' : job.error ? 'down' : 'neutral'}`;
+  const restorePending = startupDriveRestorePending();
+  const busy = !!job.running || restorePending;
+  $('task-panel').hidden = !busy && !(job.log || []).length;
+  $('task-label').textContent = restorePending && !job.running ? 'Restoring saved index data from Google Drive…' : job.message || 'Waiting for a download';
+  $('task-badge').textContent = job.running ? 'WORKING' : restorePending ? 'LOADING' : job.error ? 'NEEDS ATTENTION' : 'FINISHED';
+  $('task-badge').className = `state-badge ${busy ? 'loading' : job.error ? 'down' : 'neutral'}`;
   $('task-log').textContent = (job.log || []).join('\n');
-  $('progress').hidden = !job.running;
-  $('download-button').disabled = !!job.running;
-  $('import-button').disabled = !!job.running;
-  $('research-date').disabled = !!job.running;
-  $('research-latest').disabled = !!job.running;
-  document.querySelectorAll('[data-run-analysis]').forEach((button) => { button.disabled = !!job.running; });
-  if (job.running && !jobPoller) {
+  $('progress').hidden = !busy;
+  $('download-button').disabled = busy;
+  $('import-button').disabled = busy;
+  $('research-date').disabled = busy;
+  $('research-latest').disabled = busy;
+  document.querySelectorAll('[data-run-analysis]').forEach((button) => { button.disabled = busy; });
+  if (busy && !jobPoller) {
     jobPoller = setInterval(async () => {
       await refresh();
-      if (!state?.job?.running) { clearInterval(jobPoller); jobPoller = null; }
     }, 1400);
-  } else if (!job.running && jobPoller) {
+  } else if (!job.running && !restorePending && jobPoller) {
     clearInterval(jobPoller);
     jobPoller = null;
   }

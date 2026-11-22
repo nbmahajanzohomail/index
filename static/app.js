@@ -16,16 +16,18 @@ function isTouchPointer(event) {
 }
 
 function dismissTouchTooltip(target) {
-  if (activeTouchTooltip && !activeTouchTooltip.host.contains(target)) {
-    activeTouchTooltip.tooltip.hidden = true;
-    activeTouchTooltip = null;
+  const visibleLayer = activeTouchTooltip
+    || (historyTooltipLayer && !historyTooltipLayer.tooltip.hidden ? historyTooltipLayer : null);
+  if (visibleLayer && !visibleLayer.host.contains(target)) {
+    visibleLayer.tooltip.hidden = true;
+    if (activeTouchTooltip === visibleLayer) activeTouchTooltip = null;
   }
 }
 
-document.addEventListener('pointerdown', (event) => {
-  if (isTouchPointer(event)) dismissTouchTooltip(event.target);
-}, {passive: true});
-document.addEventListener('touchstart', (event) => dismissTouchTooltip(event.target), {passive: true});
+// Capture outside taps before Safari's synthesized click sequence reaches page controls.
+document.addEventListener('pointerdown', (event) => dismissTouchTooltip(event.target), {capture: true, passive: true});
+document.addEventListener('touchstart', (event) => dismissTouchTooltip(event.target), {capture: true, passive: true});
+document.addEventListener('click', (event) => dismissTouchTooltip(event.target), true);
 
 function storedToken() {
   try { return sessionStorage.getItem(authStorageKey) || ''; } catch { return ''; }

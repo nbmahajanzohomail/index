@@ -660,7 +660,17 @@ async function pollJobStatus() {
   state.job = job;
   renderJob(job);
   renderCloud(state.cloud || {}, job);
-  if (!job.running && !startupDriveRestorePending(state.cloud, job)) await refresh();
+  const unchangedDriveCopy = job.kind === 'cloud_refresh'
+    && (job.log || []).some((message) => message.includes('already loaded'));
+  const pageHasLoadedData = !!state?.coverage?.indexes?.rows;
+  if (!job.running && !startupDriveRestorePending(state.cloud, job)
+      && (!unchangedDriveCopy || !pageHasLoadedData)) await refresh();
+}
+
+function beginClientJob(kind, message) {
+  state.job = {running: true, kind, message, log: [], error: false};
+  renderJob(state.job);
+  renderCloud(state.cloud || {}, state.job);
 }
 
 async function prepareCloudFile() {
@@ -671,7 +681,7 @@ async function prepareCloudFile() {
     const response = await apiFetch('/api/cloud/export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not prepare the market file.');
-    await refresh();
+    beginClientJob('cloud_export', 'Preparing the index-only Google Drive market file…');
   } catch (error) {
     $('cloud-status').textContent = error.message;
     button.disabled = false;
@@ -714,7 +724,7 @@ async function loadCloudFile() {
   button.disabled = true;
   $('cloud-state-badge').className = 'state-badge loading';
   $('cloud-state-badge').textContent = 'LOADING FROM DRIVE';
-  $('cloud-status').textContent = 'Downloading and checking the saved market file from Google Drive…';
+  $('cloud-status').textContent = 'Checking whether the saved Google Drive file has changed…';
   try {
     const response = await apiFetch('/api/cloud/refresh', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -722,7 +732,7 @@ async function loadCloudFile() {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not load the Google Drive copy.');
-    await refresh();
+    beginClientJob('cloud_refresh', 'Loading the saved Google Drive market file…');
   } catch (error) {
     $('cloud-status').textContent = error.message;
     $('cloud-state-badge').className = 'state-badge down';
@@ -798,28 +808,26 @@ function selectedHistoryNeedsAnalysis() {
   return expectedSessions > storedSessions;
 }
 
-async function startAnalysis(asOf, automatic = false) {
+async function startAnalysis(asOf) {
   if (state?.job?.running) return;
-  const buttons = document.querySelectorAll('[data-run-analysis]');
-  buttons.forEach((button) => { button.disabled = true; });
-  if (automatic) {
-    $('analysis-status').textContent = `Calculating results and the two-month history through ${asOf}…`;
-    $('analysis-data-status').textContent = `Calculating results and the two-month history through ${asOf}…`;
-  }
+  const message = `Calculating analysis and two-month history through ${asOf}…`;
+  $('analysis-status').textContent = message;
+  $('analysis-data-status').textContent = message;
   try {
     const response = await apiFetch('/api/analyze', {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({as_of: asOf}),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not start analysis.');
-    const refreshed = await refresh(asOf);
-    if (!refreshed) buttons.forEach((button) => { button.disabled = false; });
+    beginClientJob('analysis', message);
   } catch (error) {
     $('analysis-status').textContent = error.message;
     $('analysis-status').className = 'muted analysis-status stale';
     $('analysis-data-status').textContent = error.message;
     $('analysis-data-status').className = 'muted analysis-data-status stale';
-    buttons.forEach((button) => { button.disabled = false; });
+    state.job = {running: false, kind: 'analysis', message: error.message, log: [error.message], error: true};
+    renderJob(state.job);
+    renderCloud(state.cloud || {}, state.job);
   }
 }
 
@@ -830,7 +838,7 @@ async function selectResearchDate(date) {
   $('research-date-status').textContent = `Loading index research through ${date}… Later rows are excluded.`;
   const loaded = await refresh(date);
   if (loaded && state?.counts.index_bars && !state?.job?.running && selectedHistoryNeedsAnalysis()) {
-    await startAnalysis(date, true);
+    await startAnalysis(date);
   }
   $('research-date').disabled = !!state?.job?.running;
 }
@@ -844,7 +852,7 @@ $('research-latest').addEventListener('click', async () => {
   $('research-latest').disabled = !!state?.job?.running;
 });
 document.querySelectorAll('[data-run-analysis]').forEach((button) => button.addEventListener('click', () => {
-  startAnalysis($('research-date').value, false);
+  startAnalysis($('research-date').value);
 }));
 $('evaluate-model').addEventListener('click', async () => {
   $('evaluate-model').disabled = true;

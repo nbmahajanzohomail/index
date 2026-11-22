@@ -31,6 +31,55 @@ def _digest(path):
     return result.hexdigest()
 
 
+def _drive_version(file_id):
+    """Probe one byte of a public Drive file to get its size and validators."""
+    import requests
+    from gdown.download import get_url_from_gdrive_confirmation
+
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'})
+    url = f'https://drive.google.com/uc?id={file_id}'
+    try:
+        for _ in range(3):
+            response = session.get(url, headers={'Range': 'bytes=0-0'}, stream=True,
+                                   allow_redirects=True, timeout=(5, 8))
+            if response.status_code not in (200, 206):
+                response.close()
+                return None
+            content_type = response.headers.get('Content-Type', '').lower()
+            if content_type.startswith('text/html'):
+                page = response.text
+                response.close()
+                url = get_url_from_gdrive_confirmation(page)
+                continue
+            if 'Content-Disposition' not in response.headers:
+                response.close()
+                return None
+            content_range = response.headers.get('Content-Range', '')
+            total = content_range.rsplit('/', 1)[-1] if '/' in content_range else None
+            size = int(total) if total and total.isdigit() else None
+            # A 206 Content-Length is only the one-byte response body, not the
+            # Drive file size. Do not treat it as a usable validator.
+            if size is None and response.status_code == 200:
+                length = response.headers.get('Content-Length')
+                size = int(length) if length and length.isdigit() else None
+            metadata = {
+                'size': size,
+                'etag': response.headers.get('ETag'),
+                'last_modified': response.headers.get('Last-Modified'),
+            }
+            response.close()
+            if size is None or not (metadata['etag'] or metadata['last_modified']):
+                return None
+            return json.dumps(metadata, sort_keys=True)
+        return None
+    except Exception:
+        # A failed metadata probe falls back to the existing fully validated download.
+        return None
+    finally:
+        session.close()
+
+
 def _get(c, key, default=''):
     row = c.execute('SELECT value FROM cloud_state WHERE key=?', (key,)).fetchone()
     return row['value'] if row else default
@@ -218,7 +267,7 @@ def _validate_database(app, database, manifest):
         c.close()
 
 
-def install_snapshot(app, archive_path, archive_sha256=None):
+def install_snapshot(app, archive_path, archive_sha256=None, drive_version=None):
     """Validate the complete archive before atomically replacing the hosted copy."""
     app.DATA.mkdir(parents=True, exist_ok=True)
     archive_sha256 = archive_sha256 or _digest(archive_path)
@@ -254,6 +303,8 @@ def install_snapshot(app, archive_path, archive_sha256=None):
                       ('cloud_source_created_at', manifest['created_at']))
             c.execute('INSERT OR REPLACE INTO cloud_state(key,value) VALUES(?,?)',
                       ('cloud_source_archive_sha256', archive_sha256))
+            c.execute('INSERT OR REPLACE INTO cloud_state(key,value) VALUES(?,?)',
+                      ('cloud_source_drive_version', drive_version or ''))
             c.commit()
         finally:
             staged_connection.close()
@@ -284,6 +335,15 @@ def refresh_drive(app, discard=False):
     if not file_id or not all(ch.isalnum() or ch in '_-' for ch in file_id) or len(file_id) < 10:
         raise ValueError('The configured Google Drive file ID is invalid. Update the project’s separate index market ZIP link.')
     import gdown
+    app.job_log('Checking whether the saved Google Drive file has changed…')
+    drive_version = _drive_version(file_id)
+    if drive_version and not current['unsaved_market_changes']:
+        with app.connect() as c:
+            already_loaded = _get(c, 'cloud_source_drive_version') == drive_version
+        if already_loaded:
+            app.job_log('Google Drive has the same saved file already loaded; no download was needed.')
+            return {'already_loaded': True}
+
     app.job_log('Fetching the configured index market ZIP from Google Drive…')
     with tempfile.TemporaryDirectory(dir=app.DATA) as work:
         path = Path(work) / 'download.zip'
@@ -297,4 +357,4 @@ def refresh_drive(app, discard=False):
             if already_loaded:
                 app.job_log('The saved Google Drive copy is already loaded; the database was left in place.')
                 return {'already_loaded': True}
-        return install_snapshot(app, path, archive_sha256)
+        return install_snapshot(app, path, archive_sha256, drive_version)

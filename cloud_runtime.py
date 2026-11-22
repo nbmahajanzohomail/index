@@ -127,6 +127,8 @@ def status(app):
     with app.connect() as c:
         revision = app.data_revision(c)
         through = c.execute('SELECT MAX(day) FROM index_bars').fetchone()[0]
+        present_underlyings = {row[0] for row in c.execute('SELECT DISTINCT underlying FROM index_bars')}
+        missing_underlyings = sorted(set(app.BY_SYMBOL) - present_underlyings)
         source_through = _get(c, 'cloud_source_through') or None
         source_revision = _get(c, 'cloud_source_revision')
         last_export_through = _get(c, 'last_export_through') or None
@@ -144,7 +146,7 @@ def status(app):
                 export_info = json.loads(archive.read('manifest.json'))
         except (OSError, ValueError, KeyError, zipfile.BadZipFile):
             export_info = None
-    export_ready = bool(not app.HOSTED and analysis_ready and export_info
+    export_ready = bool(not app.HOSTED and analysis_ready and not missing_underlyings and export_info
                         and export_info.get('format') == FORMAT
                         and export_info.get('input_revision') == revision
                         and export_info.get('analysis_run_at') == analysis_run_at)
@@ -157,9 +159,12 @@ def status(app):
         'last_export_created_at': last_export_created_at,
         'unsaved_market_changes': bool(baseline and baseline != revision),
         'analysis_ready': analysis_ready,
+        'missing_underlyings': missing_underlyings,
         'export_ready': export_ready,
         'export_mb': round(export_path.stat().st_size / 1048576, 1) if export_ready else None,
-        'export_reason': 'Run current analysis after updating market data.' if not analysis_ready else '',
+        'export_reason': (f'Import BSE index OHLC history before preparing the seven-index file. Missing: {", ".join(missing_underlyings)}.'
+                          if missing_underlyings else
+                          'Run current analysis after updating market data.' if not analysis_ready else ''),
     }
 
 

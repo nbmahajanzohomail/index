@@ -320,14 +320,18 @@ function renderCloud(cloud, job) {
         : 'Add the separate index ZIP file ID in this Render service’s private settings to enable Drive loading.';
     $('cloud-refresh-button').disabled = running || !cloud.drive_configured;
   } else {
-    badge.textContent = cloud.export_ready ? 'FILE READY' : cloud.analysis_ready ? 'READY TO PREPARE' : state.counts.index_bars ? 'RUN ANALYSIS FIRST' : 'NO INDEX DATA';
+    badge.textContent = cloud.export_ready ? 'FILE READY'
+      : cloud.missing_underlyings?.length ? 'BSE INDEX DATA NEEDED'
+        : cloud.analysis_ready ? 'READY TO PREPARE' : state.counts.index_bars ? 'RUN ANALYSIS FIRST' : 'NO INDEX DATA';
     badge.className = `state-badge ${cloud.export_ready ? 'up' : ''}`;
     $('cloud-status').textContent = cloud.export_ready
       ? `Prepared market file matches the current local data and analysis${cloud.last_export_through ? ` · through ${cloud.last_export_through}` : ''}. Download it and upload it as a separate index file in Google Drive.`
+      : cloud.missing_underlyings?.length
+        ? `Import BSE index OHLC history before preparing the seven-index Drive file. Missing: ${cloud.missing_underlyings.join(', ')}.`
       : cloud.analysis_ready
         ? 'Local index data and analysis are ready. Prepare a fresh market file after each update, then download and upload it to Drive.'
         : cloud.export_reason || 'Download or import index data, then run analysis through the latest stored date.';
-    $('cloud-export-button').disabled = running || !cloud.analysis_ready;
+    $('cloud-export-button').disabled = running || !cloud.analysis_ready || !!cloud.missing_underlyings?.length;
     $('cloud-file-button').disabled = running || !cloud.export_ready;
     $('cloud-file-button').textContent = cloud.export_ready ? `Download prepared market file (${cloud.export_mb} MB)` : 'Download prepared market file';
   }

@@ -969,6 +969,7 @@ def mature_forecasts(c, through_day):
     """Attach the first subsequently imported index session to each saved forecast."""
     rows = c.execute('''SELECT id,underlying,as_of,forecast_json FROM index_forecasts
         WHERE model_version=? AND as_of<? ORDER BY as_of,id''', (index_engine.MODEL_VERSION, through_day)).fetchall()
+    revisions = {}
     for saved in rows:
         next_bar = c.execute('''SELECT day,open,high,low,close FROM index_bars
             WHERE underlying=? AND day>? AND day<=? ORDER BY day LIMIT 1''',
@@ -983,7 +984,10 @@ def mature_forecasts(c, through_day):
         outcome = index_engine.actual_outcome(dict(previous), dict(next_bar), prediction)
         if not outcome:
             continue
-        revision = data_revision(c, next_bar['day'])
+        actual_day = next_bar['day']
+        if actual_day not in revisions:
+            revisions[actual_day] = data_revision(c, actual_day)
+        revision = revisions[actual_day]
         c.execute('''INSERT OR IGNORE INTO forecast_outcomes
             (forecast_id,actual_day,outcome,close_change_pct,range_pct,outcome_revision,created_at)
             VALUES(?,?,?,?,?,?,?)''',
@@ -1007,7 +1011,13 @@ def run_analysis(as_of=None):
         for row in results:
             if row['forecast'].get('as_of'):
                 save_forecast(c, row['forecast'])
-        mature_forecasts(c, as_of)
+        # Historical date selections are read-only research snapshots. Forecast outcomes
+        # can only mature when analysing the latest imported session, so avoid scanning
+        # the full forecast history on every historical date change (local and Render).
+        latest_day = c.execute('SELECT MAX(day) FROM index_bars WHERE day<=?',
+                               (dt.date.today().isoformat(),)).fetchone()[0]
+        if as_of == latest_day:
+            mature_forecasts(c, as_of)
         revision = data_revision(c, as_of)
         run_at = dt.datetime.now().astimezone().isoformat(timespec='seconds')
         c.execute('INSERT INTO analysis_runs(run_at,as_of,input_revision,results_json) VALUES(?,?,?,?)',

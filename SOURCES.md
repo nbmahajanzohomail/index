@@ -1,6 +1,6 @@
 # Exchange references and source assumptions
 
-These references were reviewed on 21 November 2026. Exchange pages and contract terms can change; the running project must use date-valid contract masters and recheck sources rather than relying on this note as a permanent instrument specification.
+These references were reviewed on 22 November 2026. Exchange pages and contract terms can change; the running project must use date-valid contract masters and recheck sources rather than relying on this note as a permanent instrument specification.
 
 ## NSE
 
@@ -16,8 +16,9 @@ These references were reviewed on 21 November 2026. Exchange pages and contract 
 
 ## BSE
 
-- [BSE Annual Report 2023–24](https://www.bseindia.com/downloads1/e1c61868-40f9-4105-a34e-71a6b6c28f0b.pdf) records the launch of derivatives contracts based on Sensex and Bankex.
-- [BSE market-data portal](https://marketdata.bseindia.com/) describes index OHLC and equity-derivatives data products and access plans. Confirm the user’s available BSE source, historical depth, terms, and file layout before promising automated downloads or a complete backtest.
+- [BSE historical index archive](https://www.bseindia.com/indices/IndexArchiveData.html) provides the index series and OHLC history used for Sensex and Bankex.
+- [BSE daily derivatives bhavcopy specification](https://www.bseindia.com/markets/MarketInfo/DownloadAttach.aspx?attachedId=e29aaba3-ce0b-437b-b2d6-29992a9f11b3&id=20220812-47) documents the EOD bhavcopy and contract fields, including index futures and options. The downloader uses BSE's daily `BhavCopy_BSE_FO_0_0_0_<YYYYMMDD>_F_0000.CSV` archive path and retains only SENSEX and BANKEX.
+- [BSE market-data portal](https://marketdata.bseindia.com/) describes BSE's data products and access plans. This project reads the public historical index archive and daily bhavcopy pages; it does not use a paid feed account.
 - BSE’s current contract master and notices must determine the expiry, strike grid, lot size, and tradable contracts by date. Do not hard-code an old weekday or lot-size announcement.
 
 ## Data claims to keep bounded

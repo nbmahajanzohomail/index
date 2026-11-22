@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import http.cookiejar
 import csv
 import datetime as dt
 import http.client
@@ -17,7 +18,7 @@ import webbrowser
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 import index_options_engine as index_engine
 import cloud_access
@@ -59,6 +60,8 @@ UNIVERSE = [
 ]
 BY_SYMBOL = {x['underlying']: x for x in UNIVERSE}
 NSE_UNDERLYINGS = tuple(x['underlying'] for x in UNIVERSE if x['exchange'] == 'NSE')
+BSE_UNDERLYINGS = tuple(x['underlying'] for x in UNIVERSE if x['exchange'] == 'BSE')
+BSE_INDEX_CODES = {'SENSEX': 'SENSEX', 'BANKEX': 'SIBANK'}
 ALIASES = {
     'NIFTY': 'NIFTY', 'NIFTY50': 'NIFTY', 'NIFTY50INDEX': 'NIFTY',
     'BANKNIFTY': 'BANKNIFTY', 'NIFTYBANK': 'BANKNIFTY', 'NIFTYBANKINDEX': 'BANKNIFTY',
@@ -208,7 +211,7 @@ def parse_date(value, label):
     value = value.strip()
     if 'T' in value:
         value = value.split('T', 1)[0]
-    for pattern in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%d-%b-%Y', '%d%b%Y', '%Y%m%d'):
+    for pattern in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%d-%b-%Y', '%d-%B-%Y', '%d%b%Y', '%Y%m%d'):
         try:
             return dt.datetime.strptime(value, pattern).date().isoformat()
         except ValueError:
@@ -286,15 +289,15 @@ def read_records(data, filename, allow_zip=False):
 
 
 def import_csv(dataset, filename, content, selected_underlying=None, from_date=None, to_date=None, expected_day=None):
-    if dataset not in ('indexes', 'options', 'futures', 'nse_fo', 'nse_indexes'):
-        raise ValueError('Choose an NSE index report, NSE F&O report, or normalized index CSV.')
+    if dataset not in ('indexes', 'options', 'futures', 'nse_fo', 'nse_indexes', 'bse_fo', 'bse_indexes'):
+        raise ValueError('Choose an NSE/BSE index report, exchange F&O report, or normalized index CSV.')
     from_date = parse_date(from_date, 'start of report range') if from_date else None
     to_date = parse_date(to_date, 'end of report range') if to_date else None
     expected_day = parse_date(expected_day, 'expected report') if expected_day else None
     if from_date and to_date and from_date > to_date:
         raise ValueError('The report range start must be on or before its end.')
     records = read_records(content, filename, allow_zip=(dataset == 'nse_fo'))
-    if dataset == 'nse_fo':
+    if dataset in ('nse_fo', 'bse_fo'):
         fields = {norm_header(k) for k in records[0] if k}
         groups = [
             {'tckrsymb', 'symbol', 'underlying'},
@@ -305,7 +308,7 @@ def import_csv(dataset, filename, content, selected_underlying=None, from_date=N
             {'opnintrst', 'openint', 'openinterest', 'oi'},
         ]
         if any(not fields.intersection(group) for group in groups):
-            raise ValueError('The selected file is not a supported NSE F&O bhavcopy/contract-wise report.')
+            raise ValueError(f'The selected file is not a supported {dataset.split("_")[0].upper()} F&O bhavcopy/contract-wise report.')
     stamp = dt.datetime.now().astimezone().isoformat(timespec='seconds')
     source = safe_source(filename)
     days = []
@@ -316,39 +319,47 @@ def import_csv(dataset, filename, content, selected_underlying=None, from_date=N
     with connect() as c:
         try:
             previous_rows = 0
-            if expected_day and dataset == 'nse_indexes':
-                previous_rows = c.execute('''SELECT COUNT(*) FROM index_bars
-                    WHERE exchange='NSE' AND day=? AND underlying IN (?,?,?,?,?)''',
-                    (expected_day, *NSE_UNDERLYINGS)).fetchone()[0]
-                c.execute('''DELETE FROM index_bars
-                    WHERE exchange='NSE' AND day=? AND underlying IN (?,?,?,?,?)''',
-                    (expected_day, *NSE_UNDERLYINGS))
-            elif expected_day and dataset == 'nse_fo':
+            if expected_day and dataset in ('nse_indexes', 'bse_indexes'):
+                exchange = 'NSE' if dataset == 'nse_indexes' else 'BSE'
+                underlyings = NSE_UNDERLYINGS if exchange == 'NSE' else BSE_UNDERLYINGS
+                placeholders = ','.join('?' for _ in underlyings)
+                previous_rows = c.execute(f'''SELECT COUNT(*) FROM index_bars
+                    WHERE exchange=? AND day=? AND underlying IN ({placeholders})''',
+                    (exchange, expected_day, *underlyings)).fetchone()[0]
+                c.execute(f'''DELETE FROM index_bars
+                    WHERE exchange=? AND day=? AND underlying IN ({placeholders})''',
+                    (exchange, expected_day, *underlyings))
+            elif expected_day and dataset in ('nse_fo', 'bse_fo'):
+                exchange = 'NSE' if dataset == 'nse_fo' else 'BSE'
+                underlyings = NSE_UNDERLYINGS if exchange == 'NSE' else BSE_UNDERLYINGS
+                placeholders = ','.join('?' for _ in underlyings)
                 previous_rows = sum(c.execute(f'''SELECT COUNT(*) FROM {table}
-                    WHERE day=? AND underlying IN (?,?,?,?,?)''',
-                    (expected_day, *NSE_UNDERLYINGS)).fetchone()[0]
+                    WHERE exchange=? AND day=? AND underlying IN ({placeholders})''',
+                    (exchange, expected_day, *underlyings)).fetchone()[0]
                     for table in ('option_bars', 'futures_bars'))
                 for table in ('option_bars', 'futures_bars'):
                     c.execute(f'''DELETE FROM {table}
-                        WHERE day=? AND underlying IN (?,?,?,?,?)''',
-                        (expected_day, *NSE_UNDERLYINGS))
+                        WHERE exchange=? AND day=? AND underlying IN ({placeholders})''',
+                        (exchange, expected_day, *underlyings))
             for raw in records:
-                if dataset == 'nse_indexes':
+                if dataset in ('nse_indexes', 'bse_indexes'):
+                    expected_exchange = 'NSE' if dataset == 'nse_indexes' else 'BSE'
                     try:
                         info = symbol_info(find(raw, 'underlying') or selected_underlying)
                     except ValueError:
                         continue
-                    if info['exchange'] != 'NSE':
+                    if info['exchange'] != expected_exchange:
                         continue
                     row_dataset = 'indexes'
-                elif dataset == 'nse_fo':
+                elif dataset in ('nse_fo', 'bse_fo'):
+                    expected_exchange = 'NSE' if dataset == 'nse_fo' else 'BSE'
                     try:
                         info = symbol_info(find(raw, 'underlying'))
                     except ValueError:
                         continue
-                    # NSE's common report includes single-stock contracts. Inspect them in memory,
-                    # but never persist rows outside the five NSE index underlyings in this project.
-                    if info['exchange'] != 'NSE':
+                    # Exchange bhavcopies include out-of-scope securities. Inspect them in memory,
+                    # but persist only the selected five NSE and two BSE index underlyings.
+                    if info['exchange'] != expected_exchange:
                         continue
                     option_raw = find(raw, 'option_type')
                     option_key = re.sub(r'[^A-Z]', '', (option_raw or '').upper())
@@ -432,27 +443,34 @@ def import_csv(dataset, filename, content, selected_underlying=None, from_date=N
                        oi_change, lot_size, source, stamp))
                 inserted += 1
                 day_counts[day] = day_counts.get(day, 0) + 1
-            if dataset == 'nse_indexes':
-                required = set(NSE_UNDERLYINGS)
+            if dataset in ('nse_indexes', 'bse_indexes'):
+                required = set(NSE_UNDERLYINGS if dataset == 'nse_indexes' else BSE_UNDERLYINGS)
+                exchange_name = 'NSE' if dataset == 'nse_indexes' else 'BSE'
                 for report_day in day_counts:
                     if report_day >= '2021-01-01':
                         missing = sorted(required - symbols_by_day.get(report_day, set()))
                         if missing:
-                            raise ValueError(f'NSE index report for {report_day} is incomplete: missing {", ".join(missing)}. Existing rows were preserved; retry the download.')
-            if dataset == 'nse_fo':
+                            raise ValueError(f'{exchange_name} index report for {report_day} is incomplete: missing {", ".join(missing)}. Existing rows were preserved; retry the download.')
+            if dataset in ('nse_fo', 'bse_fo'):
+                exchange_name = 'NSE' if dataset == 'nse_fo' else 'BSE'
+                min_report_date = '2024-07-08' if dataset == 'nse_fo' else '2024-01-01'
+                required_symbols = set(NSE_UNDERLYINGS if dataset == 'nse_fo' else BSE_UNDERLYINGS)
                 for report_day, row_count in day_counts.items():
-                    if report_day >= '2024-07-08':
+                    if report_day >= min_report_date:
                         covered_types = types_by_day.get(report_day, set())
-                        if row_count < 25 or len(symbols_by_day.get(report_day, set())) < 2 or not {'options', 'futures'}.issubset(covered_types):
-                            raise ValueError(f'NSE F&O report for {report_day} failed the completeness checks. Existing rows were preserved; retry the download.')
+                        if (row_count < 25 or not required_symbols.issubset(symbols_by_day.get(report_day, set()))
+                                or not {'options', 'futures'}.issubset(covered_types)):
+                            raise ValueError(f'{exchange_name} F&O report for {report_day} failed the completeness checks. Existing rows were preserved; retry the download.')
                 if expected_day and previous_rows and day_counts.get(expected_day, 0) < previous_rows * 0.8:
                     raise ValueError(f'The refreshed F&O report has materially fewer index contracts than the stored copy for {expected_day}. Existing rows were preserved for review; retry the download.')
             if not inserted:
                 if from_date or to_date:
                     c.rollback()
                     return {'rows': 0, 'first_day': None, 'last_day': None, 'dataset': dataset}
-                if dataset == 'nse_fo':
-                    raise ValueError('No supported NSE index contracts were found. The report may not be an F&O UDiFF/contract-wise file for NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, or NIFTYNXT50.')
+                if dataset in ('nse_fo', 'bse_fo'):
+                    expected_exchange = 'NSE' if dataset == 'nse_fo' else 'BSE'
+                    names = ', '.join(NSE_UNDERLYINGS if dataset == 'nse_fo' else BSE_UNDERLYINGS)
+                    raise ValueError(f'No supported {expected_exchange} index contracts were found for {names}.')
                 raise ValueError('No usable rows were found for the selected index dataset.')
             for report_day, row_count in sorted(day_counts.items()):
                 c.execute('INSERT INTO source_files(dataset,filename,imported_at,row_count,first_day,last_day) VALUES(?,?,?,?,?,?)',
@@ -490,6 +508,101 @@ def fetch_nse_report(url):
     return payload
 
 
+def open_bse_session():
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+    )
+    request = urllib.request.Request('https://www.bseindia.com/indices/IndexArchiveData.html', headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0 Safari/537.36',
+        'Referer': 'https://www.bseindia.com/',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    })
+    with opener.open(request, timeout=25) as response:
+        if response.status != 200:
+            raise ValueError(f'Could not establish the BSE report session (HTTP {response.status}).')
+        response.read(250_001)
+    return opener
+
+
+def fetch_bse_report(url, opener):
+    request = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0 Safari/537.36',
+        'Origin': 'https://www.bseindia.com',
+        'Referer': 'https://www.bseindia.com/indices/IndexArchiveData.html',
+        'Accept': 'text/csv, application/json, application/octet-stream, */*',
+        'Sec-Fetch-Site': 'same-site',
+        'Sec-Fetch-Mode': 'cors',
+    })
+    with opener.open(request, timeout=35) as response:
+        declared_size = response.headers.get('Content-Length')
+        if declared_size:
+            try:
+                declared_size = int(declared_size)
+            except ValueError as exc:
+                raise ValueError('BSE returned an invalid report size header.') from exc
+            if declared_size <= 0:
+                raise ValueError('BSE returned an empty report.')
+            if declared_size > 50_000_000:
+                raise ValueError('BSE report exceeded the 50 MB safety limit.')
+        payload = response.read(50_000_001)
+    if len(payload) > 50_000_000:
+        raise ValueError('BSE report exceeded the 50 MB safety limit.')
+    if not payload:
+        raise ValueError('BSE returned an empty report for this date range.')
+    if declared_size is not None and len(payload) != declared_size:
+        raise ValueError(f'The BSE response was incomplete ({len(payload):,} of {declared_size:,} bytes); stored data was left untouched.')
+    if payload.lstrip().lower().startswith((b'<!doctype html', b'<html')):
+        raise ValueError('BSE returned a web page instead of a market report.')
+    return payload
+
+
+def fetch_bse_index_range(start, end, opener):
+    first = dt.date.fromisoformat(start)
+    last = dt.date.fromisoformat(end)
+    reports = {}
+    for underlying, index_code in BSE_INDEX_CODES.items():
+        query = urlencode({
+            'strIndex': index_code,
+            'dtFromDate': first.strftime('%d/%m/%Y'),
+            'dtToDate': last.strftime('%d/%m/%Y'),
+            'period': 'D',
+        })
+        url = f'https://api.bseindia.com/BseIndiaAPI/api/ProduceCSVForDate/w?{query}'
+        payload = fetch_bse_report(url, opener)
+        records = read_records(payload, f'{underlying}.csv')
+        normalized = {}
+        for raw in records:
+            day = parse_date(find(raw, 'day'), 'BSE index trading')
+            if day < start or day > end:
+                raise ValueError(f'BSE {underlying} report included an out-of-range date {day}.')
+            if day in normalized:
+                raise ValueError(f'BSE {underlying} report contains duplicate rows for {day}.')
+            normalized[day] = {
+                'exchange': 'BSE', 'underlying': underlying, 'date': day,
+                'open': find(raw, 'open'), 'high': find(raw, 'high'),
+                'low': find(raw, 'low'), 'close': find(raw, 'close'),
+            }
+        if not normalized:
+            raise ValueError(f'BSE returned no {underlying} index rows from {start} through {end}.')
+        reports[underlying] = normalized
+
+    sensex_days = set(reports['SENSEX'])
+    bankex_days = set(reports['BANKEX'])
+    if sensex_days != bankex_days:
+        missing_sensex = sorted(bankex_days - sensex_days)
+        missing_bankex = sorted(sensex_days - bankex_days)
+        raise ValueError(f'BSE index reports do not cover the same sessions; missing Sensex={missing_sensex[:3]}, Bankex={missing_bankex[:3]}. Existing rows were preserved.')
+
+    output = io.StringIO(newline='')
+    fields = ('exchange', 'underlying', 'date', 'open', 'high', 'low', 'close')
+    writer = csv.DictWriter(output, fieldnames=fields, lineterminator='\n')
+    writer.writeheader()
+    for underlying in ('SENSEX', 'BANKEX'):
+        for day in sorted(reports[underlying]):
+            writer.writerow(reports[underlying][day])
+    return output.getvalue().encode('utf-8')
+
+
 def download_reports(start, end, segments):
     first = dt.date.fromisoformat(start)
     last = dt.date.fromisoformat(end)
@@ -499,12 +612,33 @@ def download_reports(start, end, segments):
         raise ValueError('Choose a range of at most 93 calendar days per download.')
     if last > dt.date.today():
         raise ValueError('The end date cannot be in the future.')
-    if not segments or any(x not in ('indexes', 'nse_fo') for x in segments):
-        raise ValueError('Select index history, F&O reports, or both.')
+    allowed_segments = ('indexes', 'nse_fo', 'bse_indexes', 'bse_fo')
+    if not segments or any(x not in allowed_segments for x in segments):
+        raise ValueError('Select one or more NSE or BSE index report types.')
 
-    checked = {'indexes': 0, 'nse_fo': 0}
+    checked = {'indexes': 0, 'nse_fo': 0, 'bse_indexes': 0, 'bse_fo': 0}
     unavailable = 0
-    job_log(f'Downloading selected NSE reports from {start} through {end}.')
+    job_log(f'Downloading selected NSE and BSE index reports from {start} through {end}.')
+    bse_opener = None
+    if 'bse_indexes' in segments or 'bse_fo' in segments:
+        try:
+            bse_opener = open_bse_session()
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError, ValueError, OSError) as exc:
+            unavailable += 1
+            job_log(f'BSE report session could not be established: {exc}. No BSE rows were changed.')
+    if 'bse_indexes' in segments and bse_opener:
+        job_log(f'{start} to {end} · fetching fresh BSE Sensex and Bankex index OHLC history.')
+        try:
+            payload = fetch_bse_index_range(start, end, bse_opener)
+            result = import_csv('bse_indexes', f'BSE_index_OHLC_{start}_{end}.csv', payload,
+                                from_date=start, to_date=end)
+            if not result['rows']:
+                raise ValueError('BSE returned no Sensex/Bankex sessions in the selected range.')
+            checked['bse_indexes'] = result['rows']
+            job_log(f'{start} to {end} · validated and updated {result["rows"]:,} BSE index rows.')
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError, ValueError, OSError, sqlite3.Error) as exc:
+            unavailable += 1
+            job_log(f'{start} to {end} · BSE index OHLC not refreshed: {exc}. Existing rows were preserved; retry later.')
     cursor = first
     while cursor <= last:
         day = cursor.isoformat()
@@ -537,12 +671,23 @@ def download_reports(start, end, segments):
                 except (urllib.error.URLError, http.client.HTTPException, TimeoutError, ValueError, OSError, sqlite3.Error) as exc:
                     unavailable += 1
                     job_log(f'{day} · F&O report not refreshed: {exc}. Existing rows were preserved; retry later if this was a trading date.')
+
+            if 'bse_fo' in segments and bse_opener:
+                filename = f'BhavCopy_BSE_FO_0_0_0_{cursor:%Y%m%d}_F_0000.CSV'
+                url = f'https://www.bseindia.com/download/Bhavcopy/Derivative/{filename}'
+                job_log(f'{day} · fetching a fresh BSE index futures/options bhavcopy.')
+                try:
+                    result = import_csv('bse_fo', filename, fetch_bse_report(url, bse_opener), expected_day=day)
+                    checked['bse_fo'] += 1
+                    job_log(f'{day} · validated and replaced {result["rows"]:,} BSE index contracts; other securities discarded.')
+                except (urllib.error.URLError, http.client.HTTPException, TimeoutError, ValueError, OSError, sqlite3.Error) as exc:
+                    unavailable += 1
+                    job_log(f'{day} · BSE F&O report not refreshed: {exc}. Existing rows were preserved; retry later if this was a trading date.')
         cursor += dt.timedelta(days=1)
-    job_log(f'NSE download finished · index reports processed: {checked["indexes"]:,} · F&O reports processed: {checked["nse_fo"]:,} · unavailable: {unavailable:,}.')
+    job_log(f'Exchange downloads finished · NSE index report days: {checked["indexes"]:,} · NSE F&O days: {checked["nse_fo"]:,} · BSE index rows: {checked["bse_indexes"]:,} · BSE F&O days: {checked["bse_fo"]:,} · unavailable: {unavailable:,}.')
     if unavailable:
         with JOB_LOCK:
             JOB['error'] = True
-    job_log('Sensex and BANKEX are BSE indices; import their BSE data from the official BSE source.')
 
 
 def mean(values):
@@ -1107,7 +1252,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(payload, dict):
                     raise ValueError('Invalid download request.')
                 start_job(lambda: download_reports(payload.get('start', ''), payload.get('end', ''), payload.get('segments', [])),
-                          message='Downloading selected NSE reports…', kind='download')
+                          message='Downloading selected NSE and BSE reports…', kind='download')
                 return self.send_json({'ok': True, 'accepted': True}, 202)
             if not TASK_LOCK.acquire(False):
                 raise ValueError('Wait for the current data task to finish.')

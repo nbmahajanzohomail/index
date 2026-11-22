@@ -67,7 +67,7 @@ def make_snapshot(app):
             present = {row[0] for row in target.execute('SELECT DISTINCT underlying FROM index_bars')}
             missing = sorted(set(app.BY_SYMBOL) - present)
             if missing:
-                raise ValueError(f'Import BSE index OHLC history before preparing the seven-index Drive file. Missing: {", ".join(missing)}.')
+                raise ValueError(f'Download BSE index OHLC history from Data centre before preparing the seven-index Drive file. Missing: {", ".join(missing)}.')
             analysis = _current_analysis(target, app, latest)
             if not analysis:
                 raise ValueError('Run analysis through the latest stored index date before preparing the Drive market file.')
@@ -162,7 +162,7 @@ def status(app):
         'missing_underlyings': missing_underlyings,
         'export_ready': export_ready,
         'export_mb': round(export_path.stat().st_size / 1048576, 1) if export_ready else None,
-        'export_reason': (f'Import BSE index OHLC history before preparing the seven-index file. Missing: {", ".join(missing_underlyings)}.'
+        'export_reason': (f'Download BSE index OHLC history from Data centre before preparing the seven-index file. Missing: {", ".join(missing_underlyings)}.'
                           if missing_underlyings else
                           'Run current analysis after updating market data.' if not analysis_ready else ''),
     }

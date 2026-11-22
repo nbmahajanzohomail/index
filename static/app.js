@@ -285,7 +285,7 @@ function renderChart(bars) {
 }
 
 function renderFiles(files) {
-  const labels = {indexes: 'Index OHLC · manual', nse_indexes: 'NSE index OHLC', options: 'Index options · manual', futures: 'Index futures · manual', nse_fo: 'NSE index options/futures'};
+  const labels = {indexes: 'Index OHLC · manual', nse_indexes: 'NSE index OHLC', bse_indexes: 'BSE index OHLC', options: 'Index options · manual', futures: 'Index futures · manual', nse_fo: 'NSE index options/futures', bse_fo: 'BSE index options/futures'};
   $('file-list').innerHTML = files.length ? files.map((f) => `<tr><td>${esc(f.first_day || '—')}</td><td>${labels[f.dataset] || esc(f.dataset)}</td><td>${compact(f.row_count)}</td><td>${esc(f.filename)}</td><td>${esc(f.imported_at)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">No files imported yet.</td></tr>';
 }
 
@@ -297,8 +297,8 @@ function renderCoverage(coverage, database) {
     return `<div class="coverage-card"><span>${label}</span><strong>${compact(item.rows)} rows</strong><small>${period}</small></div>`;
   }).join('');
   $('database-summary').textContent = `${database.name} · ${num(database.size_mb, 1)} MB · ${database.path}`;
-  const nseDays = [...new Set((state.files || []).filter((f) => f.dataset === 'nse_fo').map((f) => f.first_day))].sort();
-  $('gaps').textContent = `Last NSE F&O report processed: ${nseDays.at(-1) || 'not yet'}. The database stores only the seven selected indices; source filenames and date coverage are listed below.`;
+  const lastDayFor = (dataset) => [...new Set((state.files || []).filter((f) => f.dataset === dataset).map((f) => f.first_day))].sort().at(-1) || 'not yet';
+  $('gaps').textContent = `Last NSE F&O report processed: ${lastDayFor('nse_fo')} · Last BSE F&O report processed: ${lastDayFor('bse_fo')}. The database stores only the seven selected indices; source filenames and date coverage are listed below.`;
 }
 
 function renderCloud(cloud, job) {
@@ -327,7 +327,7 @@ function renderCloud(cloud, job) {
     $('cloud-status').textContent = cloud.export_ready
       ? `Prepared market file matches the current local data and analysis${cloud.last_export_through ? ` · through ${cloud.last_export_through}` : ''}. Download it and upload it as a separate index file in Google Drive.`
       : cloud.missing_underlyings?.length
-        ? `Import BSE index OHLC history before preparing the seven-index Drive file. Missing: ${cloud.missing_underlyings.join(', ')}.`
+        ? `Download BSE index OHLC from Data centre before preparing the seven-index Drive file. Missing: ${cloud.missing_underlyings.join(', ')}.`
       : cloud.analysis_ready
         ? 'Local index data and analysis are ready. Prepare a fresh market file after each update, then download and upload it to Drive.'
         : cloud.export_reason || 'Download or import index data, then run analysis through the latest stored date.';
@@ -691,12 +691,14 @@ $('download-form').addEventListener('submit', async (event) => {
   const segments = [];
   if ($('download-indexes').checked) segments.push('indexes');
   if ($('download-fo').checked) segments.push('nse_fo');
+  if ($('download-bse-indexes').checked) segments.push('bse_indexes');
+  if ($('download-bse-fo').checked) segments.push('bse_fo');
   if (!start || !end) { $('download-status').textContent = 'Choose both From and Through dates.'; return; }
   if (start > end) { $('download-status').textContent = 'From must be on or before Through.'; return; }
   if ((new Date(`${end}T00:00:00`) - new Date(`${start}T00:00:00`)) / 86400000 > 92) { $('download-status').textContent = 'Choose at most 93 calendar days per request.'; return; }
   if (!segments.length) { $('download-status').textContent = 'Select at least one report type.'; return; }
   $('download-button').disabled = true;
-  $('download-status').textContent = `Sending ${start} through ${end} to the NSE report downloader…`;
+  $('download-status').textContent = `Sending ${start} through ${end} to the NSE and BSE report downloader…`;
   try {
     const response = await apiFetch('/api/download', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({start, end, segments})});
     const result = await response.json();

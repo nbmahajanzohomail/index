@@ -6,7 +6,7 @@ This project deploys as its own Python web service. It uses its own GitHub repos
 
 1. Create a private, empty GitHub repository under the separate GitHub account. Use the `main` branch. Do not send account passwords, recovery codes, or two-factor codes.
 2. Push this project’s source code to that repository. The `data/` directory, SQLite database, reports, and ZIP files are excluded by `.gitignore`.
-3. On the laptop dashboard, download/import the market data for all seven indices, run analysis through the latest stored index date, and use **Data centre → Prepare market file for Drive → Download prepared market file**. The export checks for OHLC history for every index; Sensex and BANKEX must be imported from BSE before it can be prepared.
+3. On the laptop dashboard, download the selected NSE and BSE reports over the same date range, run analysis through the latest stored index date, and use **Data centre → Prepare market file for Drive → Download prepared market file**. The export checks for OHLC history for all seven indices.
 4. Upload the downloaded ZIP to a new, separate file in the existing Google Drive account. The current downloader uses the Drive file ID without signing into Google, so set this one file to **Anyone with the link · Viewer**, then copy its file ID. Anyone who gets that link can read the ZIP; it contains public market data for the seven indices plus the saved analysis and forecasts, with no stock symbols or personal records. If you want the Drive file to remain private, pause here; the hosted downloader will need a separate Google service-account setup.
 
 ## Create the independent Render service

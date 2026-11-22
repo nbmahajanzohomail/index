@@ -33,22 +33,22 @@
     <section class="research-date-panel"><label for="research-date">Show index research as of</label><input id="research-date" type="date"><button id="research-latest" class="button" type="button">Latest data</button><span id="research-date-status" role="status">Choose a stored date to limit all index research to that close.</span></section>
 
     <section class="panel index-picker-panel" aria-label="Index selection">
-      <div class="section-head"><div><div class="eyebrow">FIXED INDEX UNIVERSE</div><h2>Choose an index</h2></div><div class="index-picker-tools"><div id="data-stats" class="data-stats"></div><button class="button primary" data-run-analysis type="button">Run analysis</button></div></div>
+      <div class="section-head"><div><div class="eyebrow">FIXED INDEX UNIVERSE</div><h2>Choose an index</h2></div><div class="index-picker-tools"><div id="data-stats" class="data-stats"></div></div></div>
       <div id="index-tiles" class="index-tile-grid"><div class="empty">Loading the seven index tiles…</div></div>
       <p class="table-foot">Select a tile to show its price history, options expiries, strikes, and futures OI below. The selected date applies across this research page.</p>
     </section>
 
     <section class="panel forecast-panel" aria-live="polite">
-      <div class="section-head compact"><div><div class="eyebrow">SELECTED INDEX · NEXT AVAILABLE SESSION</div><h2 id="forecast-title">Next-session view</h2><p id="forecast-meta" class="muted">Run analysis to calculate and save the dated model view.</p></div><span id="forecast-badge" class="state-badge">No forecast saved</span></div>
+      <div class="section-head compact"><div><div class="eyebrow">SELECTED INDEX · NEXT AVAILABLE SESSION</div><h2 id="forecast-title">Next-session view</h2><p id="forecast-meta" class="muted">Results calculate automatically when you change the selected date.</p></div><span id="forecast-badge" class="state-badge">No forecast saved</span></div>
       <div id="forecast-scores" class="forecast-score-grid"><div class="empty">A saved forecast will show its separate evidence-group scores here.</div></div>
-      <div class="forecast-evidence-grid"><div><h3>Evidence behind the classification</h3><ul id="forecast-reasons" class="forecast-list"><li>Run analysis after importing index OHLC and derivatives data.</li></ul></div><div><h3>Coverage and interpretation</h3><ul id="forecast-warnings" class="forecast-list"><li>Rule scores are uncalibrated and do not represent probabilities.</li></ul></div></div>
+      <div class="forecast-evidence-grid"><div><h3>Evidence behind the classification</h3><ul id="forecast-reasons" class="forecast-list"><li>Import index OHLC and derivatives history, then choose a date.</li></ul></div><div><h3>Coverage and interpretation</h3><ul id="forecast-warnings" class="forecast-list"><li>Rule scores are uncalibrated and do not represent probabilities.</li></ul></div></div>
     </section>
 
     <section class="positioning-section">
-      <div class="section-head"><div><div class="eyebrow">SELECTED INDEX · AS-OF DATE</div><h2>Options &amp; futures OI analysis</h2><p id="analysis-status" class="muted" role="status">Run analysis to save trading entries across the two months through the selected date.</p></div><button class="button primary" data-run-analysis>Run analysis</button></div>
+      <div class="section-head"><div><div class="eyebrow">SELECTED INDEX · AS-OF DATE</div><h2>Options &amp; futures OI analysis</h2><p id="analysis-status" class="muted" role="status">Results and the two-month history calculate automatically when you change the selected date.</p></div></div>
       <div class="history-chart-heading"><div><h3>Index close and OI-change trends</h3><p>All four lines share one plot: index close uses the left ₹ axis, while PCR and futures OI percentages share the right % axis. Hover over a date for all values.</p></div><span id="history-chart-range" class="muted"></span></div>
-      <div id="analysis-chart-wrap" class="analysis-chart-wrap"><div class="empty">Run analysis to build the two-month trend chart.</div></div>
-      <div class="table-wrap"><table class="positioning-table" data-sortable><thead><tr><th>Index</th><th>As of · index close</th><th>Option expiry</th><th>PCR OI</th><th>PCR OI 1D change</th><th>Futures expiry</th><th>Futures OI</th><th>Futures OI 1D change</th><th>Futures OI 5D change</th></tr></thead><tbody id="analysis-rows"><tr><td colspan="9" class="empty">Run analysis after loading reports.</td></tr></tbody></table></div>
+      <div id="analysis-chart-wrap" class="analysis-chart-wrap"><div class="empty">The selected date’s two-month trend chart will appear automatically.</div></div>
+      <div class="table-wrap"><table class="positioning-table" data-sortable><thead><tr><th>Index</th><th>As of · index close</th><th>Option expiry</th><th>PCR OI</th><th>PCR OI 1D change</th><th>Futures expiry</th><th>Futures OI</th><th>Futures OI 1D change</th><th>Futures OI 5D change</th></tr></thead><tbody id="analysis-rows"><tr><td colspan="9" class="empty">Select a date to load or calculate its history.</td></tr></tbody></table></div>
       <p class="table-foot analysis-foot">Rows are ordered newest first and include every available index trading session in the two calendar months through the selected as-of date. Missing market data remains —; later dates are excluded.</p>
       <p class="table-foot analysis-foot">PCR OI uses traded options within ±10% of spot and the nearest expiry 2–90 days away. One-day changes require the same expiry. Five-day futures OI compares up to the three nearest expiries held in common with the session five days earlier; unavailable comparisons show —.</p>
     </section>
@@ -78,11 +78,11 @@
     </section>
 
     <section id="data-centre-page" class="data-centre-page" role="tabpanel" aria-labelledby="data-centre-tab" hidden>
-      <div class="section-head data-title"><div><div class="eyebrow">DOWNLOAD · IMPORT · COVERAGE</div><h2>Data centre</h2><p class="muted">Manage the seven-index research library, prepare its separate Drive file, or load the saved file into this dashboard.</p></div><div class="data-title-actions"><button class="button primary" data-run-analysis>Run analysis</button><button class="button" id="refresh-files">Refresh data status</button></div></div>
+      <div class="section-head data-title"><div><div class="eyebrow">DOWNLOAD · IMPORT · COVERAGE</div><h2>Data centre</h2><p class="muted">Manage the seven-index research library, prepare its separate Drive file, or load the saved file into this dashboard.</p></div><div class="data-title-actions"><button class="button" id="refresh-files">Refresh data status</button></div></div>
       <p id="analysis-data-status" class="muted analysis-data-status" role="status">No saved analysis yet.</p>
       <section class="panel cloud-panel" aria-labelledby="cloud-panel-title">
-        <div class="section-head"><div><div class="eyebrow">INDEX MARKET DATA · DRIVE BACKUP</div><h2 id="cloud-panel-title">Market-data handoff</h2></div><span id="cloud-state-badge" class="state-badge">Checking setup</span></div>
-        <p id="cloud-status" class="muted">Checking the local snapshot and hosted setup…</p>
+        <div class="section-head"><div><div class="eyebrow">INDEX MARKET DATA · DRIVE BACKUP</div><h2 id="cloud-panel-title">Market-data handoff</h2></div><span id="cloud-state-badge" class="state-badge">Preparing dashboard</span></div>
+        <p id="cloud-status" class="muted">The saved Drive copy will be available here.</p>
         <div id="cloud-button-row" class="cloud-button-row">
           <button class="button primary" id="cloud-export-button" type="button">Prepare market file for Drive</button>
           <button class="button" id="cloud-file-button" type="button" disabled>Download prepared market file</button>

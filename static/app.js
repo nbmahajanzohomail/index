@@ -19,6 +19,15 @@ function showSignIn() {
   $('cloud-login').hidden = false;
   $('cloud-password').focus();
 }
+function showHostedDriveAction() {
+  const button = $('cloud-refresh-button');
+  button.hidden = false;
+  button.disabled = false;
+  $('cloud-state-badge').className = 'state-badge up';
+  $('cloud-state-badge').textContent = 'DRIVE FILE READY';
+  $('cloud-status').textContent = 'Click Load saved Google Drive copy to fetch the saved index market file.';
+  $('cloud-action-help').textContent = 'The project is connected to your separate index market ZIP. Replace that file’s contents in Drive to keep its link unchanged.';
+}
 async function apiFetch(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (hosted && authToken) headers.set('Authorization', `Bearer ${authToken}`);
@@ -39,9 +48,13 @@ async function boot() {
     $('cloud-signout').hidden = !hosted;
     authToken = storedToken();
     if (hosted && !authToken) { showSignIn(); return; }
+    if (hosted) showHostedDriveAction();
     await refresh();
   } catch (error) {
     $('research-date-status').textContent = `${error.message} The service may be starting; click Refresh to retry.`;
+    $('cloud-state-badge').className = 'state-badge down';
+    $('cloud-state-badge').textContent = 'Dashboard unavailable';
+    $('cloud-status').textContent = `${error.message} The service may be starting; click Refresh to retry.`;
   }
 }
 
@@ -84,9 +97,11 @@ async function refresh(asOf = null) {
       researchDateReady = true;
     }
     render();
+    return true;
   } catch (error) {
     $('index-tiles').innerHTML = `<div class="empty error">${esc(error.message)}</div>`;
     $('research-date-status').textContent = error.message;
+    return false;
   } finally {
     $('refresh').disabled = false;
   }
@@ -119,7 +134,7 @@ function renderIndexTiles() {
     return `<button type="button" class="index-tile${active ? ' selected-tile' : ''}" data-index="${esc(item.underlying)}" aria-pressed="${active}">
       <span>${esc(item.name)}</span><strong class="${move > 0 ? 'positive' : move < 0 ? 'negative' : ''}">${item.close === null ? '—' : `₹${num(item.close)}`}</strong>
       <small>${esc(item.underlying)} · ${esc(item.exchange)}</small><small>${esc(item.day || 'No data through selected date')}</small>
-      <small class="tile-change">1D ${signed(move)}</small><small class="tile-forecast">${item.forecast ? `Next: ${esc(item.forecast.direction)}` : 'Next: run analysis'}</small></button>`;
+      <small class="tile-change">1D ${signed(move)}</small><small class="tile-forecast">${item.forecast ? `Next: ${esc(item.forecast.direction)}` : 'Next: select a date'}</small></button>`;
   }).join('');
   $('index-tiles').querySelectorAll('[data-index]').forEach((node) => node.addEventListener('click', () => {
     selected = node.dataset.index;
@@ -135,12 +150,12 @@ function renderForecast(item) {
     $('forecast-title').textContent = `${item?.name || 'Selected index'} · next-session view`;
     $('forecast-title').className = '';
     $('forecast-meta').textContent = item?.day
-      ? `No saved forecast for ${item.day}. Click Run analysis to save the selected date.`
+      ? `No saved forecast for ${item.day}. It will calculate when you change the selected date.`
       : 'No index price history is available through the selected date.';
     badge.textContent = 'No forecast saved';
     badge.className = 'state-badge';
     $('forecast-scores').innerHTML = '<div class="empty">No saved evidence scores for this date.</div>';
-    $('forecast-reasons').innerHTML = '<li>Import index OHLC and derivatives history, then run analysis.</li>';
+    $('forecast-reasons').innerHTML = '<li>Import index OHLC and derivatives history, then select a date.</li>';
     $('forecast-warnings').innerHTML = '<li>Forecasts are dated and saved separately from the stock dashboard.</li>';
     return;
   }
@@ -151,13 +166,13 @@ function renderForecast(item) {
   const outcome = forecast.outcome
     ? ` · next session ${forecast.outcome.outcome} on ${forecast.outcome.actual_day} (${signed(forecast.outcome.close_change_pct)})`
     : ' · next-session outcome pending';
-  $('forecast-meta').textContent = `Signal close ${forecast.as_of} · ${forecast.model_version} · net rule score ${forecast.net_score > 0 ? '+' : ''}${num(forecast.net_score)}${forecast.stale ? ' · saved inputs changed; rerun analysis' : ''}${outcome}`;
+  $('forecast-meta').textContent = `Signal close ${forecast.as_of} · ${forecast.model_version} · net rule score ${forecast.net_score > 0 ? '+' : ''}${num(forecast.net_score)}${forecast.stale ? ' · saved inputs changed; use the top Run analysis button to refresh' : ''}${outcome}`;
   const labels = {index_structure: 'Index structure', futures_positioning: 'Futures positioning', options_positioning: 'Options positioning', cross_index_context: 'Cross-index context'};
   $('forecast-scores').innerHTML = Object.entries(forecast.scores || {}).map(([key, value]) => `<div class="forecast-score"><span>${esc(labels[key] || key)}</span><strong class="${value > 0 ? 'positive' : value < 0 ? 'negative' : ''}">${value > 0 ? '+' : ''}${num(value)}</strong><small>bounded score points</small></div>`).join('') || '<div class="empty">No component scores.</div>';
   $('forecast-reasons').innerHTML = (forecast.reasons || []).length
     ? forecast.reasons.map((reason) => `<li>${esc(reason)}</li>`).join('') : '<li>No directional evidence passed the reporting checks.</li>';
   const warnings = [...(forecast.warnings || [])];
-  if (forecast.stale) warnings.unshift('Inputs changed after this saved forecast. Rerun analysis to create the current version.');
+  if (forecast.stale) warnings.unshift('Inputs changed after this saved forecast. Use the top Run analysis button to create the current version.');
   $('forecast-warnings').innerHTML = warnings.length
     ? warnings.map((warning) => `<li>${esc(warning)}</li>`).join('') : '<li>No additional data coverage warnings.</li>';
 }
@@ -312,7 +327,7 @@ function renderCloud(cloud, job) {
   $('manual-import-panel').hidden = hostedCopy;
   $('hosted-temporary-note').style.display = hostedCopy ? '' : 'none';
   $('cloud-action-help').textContent = hostedCopy
-    ? 'On Render: download reports, run analysis, prepare this ZIP, then download it to your phone and replace the contents of the same separate Drive file so its ID stays unchanged. If Drive creates a new file, its link must be updated in this project before loading it here.'
+    ? 'On Render: download reports, use the top Run analysis button if needed, prepare this ZIP, then download it to your phone and replace the contents of the same separate Drive file so its ID stays unchanged.'
     : 'Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.';
   $('cloud-export-button').disabled = running || !cloud.analysis_ready || !!cloud.missing_underlyings?.length;
   $('cloud-file-button').disabled = running || !cloud.export_ready;
@@ -320,17 +335,20 @@ function renderCloud(cloud, job) {
   $('cloud-refresh-button').disabled = running || !cloud.drive_configured;
   const badge = $('cloud-state-badge');
   if (hostedCopy) {
+    const driveLoadFailed = job.kind === 'cloud_refresh' && job.error;
     const taskLabel = job.kind === 'download' ? 'DOWNLOADING REPORTS'
       : job.kind === 'analysis' ? 'RUNNING ANALYSIS'
         : job.kind === 'cloud_export' ? 'PREPARING DRIVE FILE'
           : job.kind === 'cloud_refresh' ? 'LOADING FROM DRIVE' : 'TASK RUNNING';
     badge.textContent = running ? taskLabel
+      : driveLoadFailed ? 'DRIVE LOAD FAILED'
       : cloud.export_ready ? 'DRIVE FILE READY'
         : cloud.saved_through ? 'DRIVE COPY LOADED'
           : cloud.drive_configured ? 'WAITING FOR DRIVE' : 'DRIVE SETUP NEEDED';
-    badge.className = `state-badge ${cloud.export_ready || cloud.saved_through ? 'up' : ''}`;
+    badge.className = `state-badge ${running && job.kind === 'cloud_refresh' ? 'loading' : driveLoadFailed ? 'down' : cloud.export_ready || cloud.saved_through ? 'up' : ''}`;
     $('cloud-status').textContent = running
       ? (job.message || 'The hosted data task is running…')
+      : driveLoadFailed ? ((job.log || []).at(-1) || 'Could not load the saved Google Drive copy.')
       : cloud.export_ready
         ? `A checked, index-only market file is ready${cloud.last_export_through ? ` through ${cloud.last_export_through}` : ''}. Download it, upload it to the same separate Drive file, then load the saved copy here.`
         : cloud.missing_underlyings?.length
@@ -338,12 +356,12 @@ function renderCloud(cloud, job) {
           : cloud.analysis_ready
             ? 'The current market data and analysis are ready. Prepare and download the index-only ZIP, upload it to the separate Drive file, then load that saved copy here.'
             : state.counts.index_bars
-              ? 'Market data is in this temporary Render copy. Run analysis, then prepare and download a Drive file before the hosted copy is restarted.'
+              ? 'Market data is in this temporary Render copy. Use the top Run analysis button if needed, then prepare and download a Drive file before the hosted copy is restarted.'
               : cloud.saved_through
-                ? `The hosted copy loaded the saved index data through ${cloud.saved_through}. You can download fresh NSE and BSE reports here, run analysis, and save a new Drive file.`
+                ? `The hosted copy loaded the saved index data through ${cloud.saved_through}. You can download fresh NSE and BSE reports here, use the top Run analysis button if needed, and save a new Drive file.`
                 : cloud.drive_configured
                   ? 'No saved market snapshot is loaded yet. Download reports here or load the configured Drive file.'
-                  : 'Download reports and run analysis here. The separate index ZIP file is configured for this project; click Load saved Google Drive copy to fetch it.';
+                  : 'Download reports here. The separate index ZIP file is configured for this project; click Load saved Google Drive copy to fetch it.';
     return;
   }
 
@@ -357,7 +375,7 @@ function renderCloud(cloud, job) {
       ? `Download NSE index OHLC for the five required NSE indices before preparing the Drive file. BSE index OHLC is optional. Missing: ${cloud.missing_underlyings.join(', ')}.`
       : cloud.analysis_ready
         ? 'Local index data and analysis are ready. Prepare a fresh market file after each update, then download and upload it to Drive.'
-        : cloud.export_reason || 'Download or import index data, then run analysis through the latest stored date.';
+        : cloud.export_reason || 'Download or import index data, then use the top Run analysis button if needed.';
 }
 
 function renderAnalysis(analysis, job = {}, item = null) {
@@ -367,15 +385,15 @@ function renderAnalysis(analysis, job = {}, item = null) {
     ? `Analysis could not complete: ${(job.log || []).at(-1) || 'Check the task log.'}` : '';
   if (!analysis) {
     const message = analysisFailure || (job.kind === 'analysis' && job.running
-      ? `Analysis is running for ${state.as_of}…`
-      : `No saved analysis for ${state.as_of}. Click Run analysis to calculate and save the selected date.`);
+      ? `Calculating analysis and two-month history through ${state.as_of}…`
+      : `No saved analysis for ${state.as_of}. Change the date to calculate this view automatically.`);
     status.textContent = message;
     dataStatus.textContent = message;
     status.className = `muted analysis-status ${analysisFailure ? 'stale' : ''}`;
     dataStatus.className = `muted analysis-data-status ${analysisFailure ? 'stale' : ''}`;
     $('history-chart-range').textContent = '';
     renderHistoryChart([]);
-    $('analysis-rows').innerHTML = '<tr><td colspan="9" class="empty">No saved analysis for this as-of date. Click Run analysis.</td></tr>';
+    $('analysis-rows').innerHTML = '<tr><td colspan="9" class="empty">The selected date’s analysis and history will appear automatically.</td></tr>';
     return;
   }
   const stale = !!analysis.stale;
@@ -388,10 +406,10 @@ function renderAnalysis(analysis, job = {}, item = null) {
   $('history-chart-range').textContent = historyRows.length ? `${firstDay} → ${lastDay} · ${historyRows.length} sessions` : '';
   renderHistoryChart(historyRows);
   const message = analysisFailure || `${stale
-    ? `Data through ${analysis.as_of} changed since this saved run. Click Run analysis to refresh the results.`
+    ? `Data through ${analysis.as_of} changed since this saved run. Use the top Run analysis button to refresh these results.`
     : `${runLabel} · saved results match the selected date.`}${historyNote}`;
-  status.textContent = job.kind === 'analysis' && job.running ? 'Analysis is running…' : message;
-  dataStatus.textContent = job.kind === 'analysis' && job.running ? 'Analysis is running…' : message;
+  status.textContent = job.kind === 'analysis' && job.running ? `Calculating analysis and two-month history through ${state.as_of}…` : message;
+  dataStatus.textContent = job.kind === 'analysis' && job.running ? `Calculating analysis and two-month history through ${state.as_of}…` : message;
   status.className = `muted analysis-status ${stale || analysisFailure ? 'stale' : ''}`;
   dataStatus.className = `muted analysis-data-status ${stale || analysisFailure ? 'stale' : ''}`;
   $('analysis-rows').innerHTML = historyRows.length ? historyRows.map((row) => {
@@ -413,7 +431,7 @@ function renderHistoryChart(historyRows) {
   const host = $('analysis-chart-wrap');
   const rows = [...(historyRows || [])].filter((row) => row.day).reverse();
   if (!rows.length) {
-    host.innerHTML = '<div class="empty">Run analysis to build the two-month trend chart.</div>';
+    host.innerHTML = '<div class="empty">The selected date’s two-month history will appear after its automatic calculation.</div>';
     return;
   }
 
@@ -581,7 +599,12 @@ async function prepareCloudFile() {
 
 async function downloadCloudFile() {
   const button = $('cloud-file-button');
+  const label = button.textContent;
+  const wasDisabled = button.disabled;
   button.disabled = true;
+  button.classList.add('loading');
+  button.setAttribute('aria-busy', 'true');
+  button.textContent = 'Downloading prepared market file…';
   try {
     const response = await apiFetch('/api/cloud/file');
     if (!response.ok) {
@@ -597,7 +620,10 @@ async function downloadCloudFile() {
   } catch (error) {
     $('cloud-status').textContent = error.message;
   } finally {
-    button.disabled = false;
+    button.disabled = wasDisabled;
+    button.classList.remove('loading');
+    button.removeAttribute('aria-busy');
+    button.textContent = label;
   }
 }
 
@@ -605,6 +631,9 @@ async function loadCloudFile() {
   const button = $('cloud-refresh-button');
   if (state?.cloud?.unsaved_market_changes && !window.confirm('Replace this temporary hosted data with the saved Google Drive copy?')) return;
   button.disabled = true;
+  $('cloud-state-badge').className = 'state-badge loading';
+  $('cloud-state-badge').textContent = 'LOADING FROM DRIVE';
+  $('cloud-status').textContent = 'Downloading and checking the saved market file from Google Drive…';
   try {
     const response = await apiFetch('/api/cloud/refresh', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -615,7 +644,10 @@ async function loadCloudFile() {
     await refresh();
   } catch (error) {
     $('cloud-status').textContent = error.message;
-    button.disabled = false;
+    $('cloud-state-badge').className = 'state-badge down';
+    $('cloud-state-badge').textContent = 'DRIVE LOAD FAILED';
+  } finally {
+    if (!state?.job?.running) button.disabled = false;
   }
 }
 
@@ -642,6 +674,7 @@ $('cloud-login-form').addEventListener('submit', async (event) => {
     status.textContent = '';
     $('cloud-login').hidden = true;
     document.body.classList.remove('needs-signin');
+    if (hosted) showHostedDriveAction();
     await refresh();
   } catch (error) {
     status.textContent = error.message;
@@ -662,37 +695,75 @@ document.querySelectorAll('[data-page]').forEach((button) => button.addEventList
 
 $('refresh').addEventListener('click', () => refresh());
 $('refresh-files').addEventListener('click', () => refresh());
-$('research-date').addEventListener('change', async () => {
-  const date = $('research-date').value;
-  if (!date) return;
-  $('research-date').disabled = true;
-  $('research-date-status').textContent = `Loading index research through ${date}… Later rows are excluded.`;
-  await refresh(date);
-  $('research-date').disabled = !!state?.job?.running;
-});
-$('research-latest').addEventListener('click', async () => {
-  const latest = state?.latest_date || state?.today;
-  if (!latest) return;
-  $('research-date').value = latest;
-  $('research-latest').disabled = true;
-  $('research-date-status').textContent = `Loading latest stored index data through ${latest}…`;
-  await refresh(latest);
-  $('research-latest').disabled = !!state?.job?.running;
-});
-document.querySelectorAll('[data-run-analysis]').forEach((button) => button.addEventListener('click', async () => {
-  document.querySelectorAll('[data-run-analysis]').forEach((item) => { item.disabled = true; });
+function calendarMonthsBefore(day, months) {
+  const [year, month, date] = day.split('-').map(Number);
+  const targetMonthIndex = year * 12 + month - 1 - months;
+  const targetYear = Math.floor(targetMonthIndex / 12);
+  const targetMonth = targetMonthIndex % 12 + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(Math.min(date, lastDay)).padStart(2, '0')}`;
+}
+
+function selectedHistoryNeedsAnalysis() {
+  const analysis = state?.analysis;
+  if (!analysis || analysis.stale) return true;
+  const result = (analysis.results || []).find((row) => row.underlying === selected);
+  const index = (state?.indexes || []).find((row) => row.underlying === selected);
+  if (!result || !index) return true;
+  const through = analysis.as_of || state.as_of;
+  const from = calendarMonthsBefore(through, 2);
+  const expectedSessions = (index.bars || []).filter((bar) => bar.day >= from && bar.day <= through).length;
+  const storedSessions = (result.history || []).filter((row) => row.day >= from && row.day <= through).length;
+  return expectedSessions > storedSessions;
+}
+
+async function startAnalysis(asOf, automatic = false) {
+  if (state?.job?.running) return;
+  const buttons = document.querySelectorAll('[data-run-analysis]');
+  buttons.forEach((button) => { button.disabled = true; });
+  if (automatic) {
+    $('analysis-status').textContent = `Calculating results and the two-month history through ${asOf}…`;
+    $('analysis-data-status').textContent = `Calculating results and the two-month history through ${asOf}…`;
+  }
   try {
-    const response = await apiFetch('/api/analyze', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({as_of: $('research-date').value})});
+    const response = await apiFetch('/api/analyze', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({as_of: asOf}),
+    });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Could not start analysis.');
-    await refresh();
+    const refreshed = await refresh(asOf);
+    if (!refreshed) buttons.forEach((button) => { button.disabled = false; });
   } catch (error) {
     $('analysis-status').textContent = error.message;
     $('analysis-status').className = 'muted analysis-status stale';
     $('analysis-data-status').textContent = error.message;
     $('analysis-data-status').className = 'muted analysis-data-status stale';
-    document.querySelectorAll('[data-run-analysis]').forEach((item) => { item.disabled = false; });
+    buttons.forEach((button) => { button.disabled = false; });
   }
+}
+
+async function selectResearchDate(date) {
+  if (!date) return;
+  $('research-date').value = date;
+  $('research-date').disabled = true;
+  $('research-date-status').textContent = `Loading index research through ${date}… Later rows are excluded.`;
+  const loaded = await refresh(date);
+  if (loaded && state?.counts.index_bars && !state?.job?.running && selectedHistoryNeedsAnalysis()) {
+    await startAnalysis(date, true);
+  }
+  $('research-date').disabled = !!state?.job?.running;
+}
+
+$('research-date').addEventListener('change', () => selectResearchDate($('research-date').value));
+$('research-latest').addEventListener('click', async () => {
+  const latest = state?.latest_date || state?.today;
+  if (!latest) return;
+  $('research-latest').disabled = true;
+  await selectResearchDate(latest);
+  $('research-latest').disabled = !!state?.job?.running;
+});
+document.querySelectorAll('[data-run-analysis]').forEach((button) => button.addEventListener('click', () => {
+  startAnalysis($('research-date').value, false);
 }));
 $('evaluate-model').addEventListener('click', async () => {
   $('evaluate-model').disabled = true;

@@ -1230,7 +1230,9 @@ class Handler(BaseHTTPRequestHandler):
                     requested_as_of = parse_date(requested_as_of, 'analysis cutoff')
                     if requested_as_of > dt.date.today().isoformat():
                         raise ValueError('Choose a research date on or before today.')
-                start_job(lambda: run_analysis(requested_as_of), message='Preparing index options and futures analysis…', kind='analysis')
+                analysis_through = requested_as_of or 'latest available session'
+                start_job(lambda: run_analysis(requested_as_of),
+                          message=f'Calculating analysis and two-month history through {analysis_through}…', kind='analysis')
                 return self.send_json({'ok': True, 'accepted': True}, 202)
             if path == '/api/evaluate':
                 payload = json.loads(body.decode('utf-8'))

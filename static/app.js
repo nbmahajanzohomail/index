@@ -7,6 +7,24 @@ let hosted = false;
 let authToken = '';
 const tableSortState = new WeakMap();
 const authStorageKey = 'index-options-research-auth';
+let activeTouchTooltip = null;
+
+function isTouchPointer(event) {
+  return event.pointerType === 'touch'
+    || (!event.pointerType && ((navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window));
+}
+
+function dismissTouchTooltip(target) {
+  if (activeTouchTooltip && !activeTouchTooltip.host.contains(target)) {
+    activeTouchTooltip.tooltip.hidden = true;
+    activeTouchTooltip = null;
+  }
+}
+
+document.addEventListener('pointerdown', (event) => {
+  if (isTouchPointer(event)) dismissTouchTooltip(event.target);
+}, {passive: true});
+document.addEventListener('touchstart', (event) => dismissTouchTooltip(event.target), {passive: true});
 
 function storedToken() {
   try { return sessionStorage.getItem(authStorageKey) || ''; } catch { return ''; }
@@ -429,6 +447,7 @@ function renderAnalysis(analysis, job = {}, item = null) {
 
 function renderHistoryChart(historyRows) {
   const host = $('analysis-chart-wrap');
+  if (activeTouchTooltip?.host === host) activeTouchTooltip = null;
   const rows = [...(historyRows || [])].filter((row) => row.day).reverse();
   if (!rows.length) {
     host.innerHTML = '<div class="empty">The selected date’s two-month history will appear after its automatic calculation.</div>';
@@ -531,8 +550,9 @@ function renderHistoryChart(historyRows) {
 
   const svg = host.querySelector('svg');
   const tooltip = host.querySelector('.history-tooltip');
+  let touchPinned = false;
   host.querySelectorAll('[data-history-index]').forEach((hit) => {
-    const show = (event) => {
+    const show = (event, pinForTouch = false) => {
       const index = Number(hit.dataset.historyIndex);
       const row = rows[index];
       if (!row) return;
@@ -547,12 +567,27 @@ function renderHistoryChart(historyRows) {
       const chartX = event.clientX - box.left;
       const chartY = event.clientY - box.top;
       tooltip.style.left = `${Math.max(8, Math.min(chartX + 14, box.width - bounds.width - 8))}px`;
-      tooltip.style.top = `${Math.max(8, Math.min(chartY + 12, box.height - bounds.height - 8))}px`;
+      const aboveFinger = chartY - bounds.height - 12;
+      const desiredY = pinForTouch && aboveFinger >= 8 ? aboveFinger : chartY + 12;
+      tooltip.style.top = `${Math.max(8, Math.min(desiredY, box.height - bounds.height - 8))}px`;
+      touchPinned = pinForTouch;
     };
-    hit.addEventListener('pointerenter', show);
-    hit.addEventListener('pointermove', show);
+    hit.addEventListener('pointerenter', (event) => {
+      if (event.pointerType !== 'touch') show(event);
+    });
+    hit.addEventListener('pointermove', (event) => {
+      if (event.pointerType !== 'touch') show(event);
+    });
+    hit.addEventListener('click', (event) => {
+      const touch = isTouchPointer(event);
+      if (touch) activeTouchTooltip = {host, tooltip};
+      show(event, touch);
+    });
   });
-  svg.addEventListener('pointerleave', () => { tooltip.hidden = true; });
+  svg.addEventListener('pointerleave', (event) => {
+    if (event.pointerType === 'touch' || touchPinned) return;
+    tooltip.hidden = true;
+  });
 }
 
 function renderJob(job = {}) {

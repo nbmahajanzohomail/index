@@ -312,7 +312,7 @@ function renderCloud(cloud, job) {
   $('manual-import-panel').hidden = hostedCopy;
   $('hosted-temporary-note').style.display = hostedCopy ? '' : 'none';
   $('cloud-action-help').textContent = hostedCopy
-    ? 'On Render: download reports, run analysis, prepare this ZIP, then download it to your phone and replace the contents of the same separate Drive file so its ID stays unchanged. If Drive creates a new file, update INDEX_DRIVE_FILE_ID in Render settings before loading it here.'
+    ? 'On Render: download reports, run analysis, prepare this ZIP, then download it to your phone and replace the contents of the same separate Drive file so its ID stays unchanged. If Drive creates a new file, its link must be updated in this project before loading it here.'
     : 'Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.';
   $('cloud-export-button').disabled = running || !cloud.analysis_ready || !!cloud.missing_underlyings?.length;
   $('cloud-file-button').disabled = running || !cloud.export_ready;
@@ -343,7 +343,7 @@ function renderCloud(cloud, job) {
                 ? `The hosted copy loaded the saved index data through ${cloud.saved_through}. You can download fresh NSE and BSE reports here, run analysis, and save a new Drive file.`
                 : cloud.drive_configured
                   ? 'No saved market snapshot is loaded yet. Download reports here or load the configured Drive file.'
-                  : 'Download reports and run analysis here. Set the separate index ZIP file ID in Render settings to enable loading the saved Drive copy.';
+                  : 'Download reports and run analysis here. The separate index ZIP file is configured for this project; click Load saved Google Drive copy to fetch it.';
     return;
   }
 

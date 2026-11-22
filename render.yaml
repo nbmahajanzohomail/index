@@ -16,5 +16,3 @@ services:
         sync: false
       - key: INDEX_SESSION_SECRET
         generateValue: true
-      - key: INDEX_DRIVE_FILE_ID
-        sync: false

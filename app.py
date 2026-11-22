@@ -1291,7 +1291,7 @@ def main():
         print('Dashboard health check: passed.', flush=True)
         if not HOSTED and '--no-browser' not in sys.argv:
             webbrowser.open(url)
-        if HOSTED and os.environ.get('INDEX_DRIVE_FILE_ID'):
+        if HOSTED and cloud_runtime.drive_file_id():
             with connect() as c:
                 empty = c.execute('SELECT COUNT(*) FROM index_bars').fetchone()[0] == 0
             if empty:

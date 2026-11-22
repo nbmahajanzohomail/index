@@ -15,6 +15,12 @@ ARCHIVE_NAME = 'index-market.zip'
 DATABASE_NAME = 'index_market.sqlite3'
 MAX_DRIVE_BYTES = 350_000_000
 MAX_DATABASE_BYTES = 1_500_000_000
+DEFAULT_DRIVE_FILE_ID = '1qjgh8Ep9eVmzMStDS4Cc23uJD1qjHKlI'
+
+
+def drive_file_id():
+    """Return the index snapshot ID shared for this project."""
+    return DEFAULT_DRIVE_FILE_ID
 
 
 def _digest(path):
@@ -158,7 +164,7 @@ def status(app):
                           if key in ('index', 'options', 'futures'))
     return {
         'hosted': app.HOSTED,
-        'drive_configured': bool(os.environ.get('INDEX_DRIVE_FILE_ID')),
+        'drive_configured': bool(drive_file_id()),
         'saved_through': source_through,
         'last_export_through': last_export_through,
         'last_export_created_at': last_export_created_at,
@@ -270,9 +276,9 @@ def refresh_drive(app, discard=False):
     current = status(app)
     if current['unsaved_market_changes'] and not discard:
         raise ValueError('Temporary market data is present. Confirm replacement from the saved Drive file before continuing.')
-    file_id = os.environ.get('INDEX_DRIVE_FILE_ID', '')
+    file_id = drive_file_id()
     if not file_id or not all(ch.isalnum() or ch in '_-' for ch in file_id) or len(file_id) < 10:
-        raise ValueError('Set INDEX_DRIVE_FILE_ID in the Render service settings to the separate index market ZIP file.')
+        raise ValueError('The configured Google Drive file ID is invalid. Update the project’s separate index market ZIP link.')
     import gdown
     app.job_log('Fetching the configured index market ZIP from Google Drive…')
     with tempfile.TemporaryDirectory(dir=app.DATA) as work:

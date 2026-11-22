@@ -13,10 +13,10 @@ This project deploys as its own Python web service. It uses its own GitHub repos
 
 1. In the existing Render workspace, connect/authorize the new GitHub account for the new repository.
 2. Create a Blueprint from the repository's `render.yaml`. It creates `nse-index-options-research`, a separate web service with its own Render URL and automatic deploys from `main`.
-3. When prompted, set `INDEX_DASHBOARD_PASSWORD` to a private password of at least 12 characters and set `INDEX_DRIVE_FILE_ID` to the new index ZIP's file ID. Render generates `INDEX_SESSION_SECRET`.
+3. When prompted, set `INDEX_DASHBOARD_PASSWORD` to a private password of at least 12 characters. The separate index ZIP file ID is configured for this project; Render generates `INDEX_SESSION_SECRET`.
 4. Wait for the service to become Live and its `/health` check to pass. Sign in using the dashboard password. The service loads the configured Drive snapshot when its hosted database is empty.
 
-The Render service reads only its own `INDEX_*` settings. Never put passwords, session secrets, service-account keys, local databases, or market ZIPs in GitHub. The Drive snapshot is public market data only and contains no stock symbols or personal records.
+The Render service reads only its own `INDEX_*` settings. The configured Drive file must allow **Anyone with the link · Viewer** so Render can fetch it without a Google sign-in. The Drive file ID is stored as this project’s market-data source; if you replace the Drive file instead of replacing its contents, update `DEFAULT_DRIVE_FILE_ID` in `cloud_runtime.py` and redeploy. Never put passwords, session secrets, service-account keys, local databases, or market ZIPs in GitHub. The Drive snapshot is public market data only and contains no stock symbols or personal records.
 
 ## Daily data update
 
@@ -26,7 +26,7 @@ Normally, update data on the laptop, run analysis, prepare/download a fresh mark
 
 1. Open **Data centre** on the hosted dashboard. Choose the date range and report types, then click **Download selected reports**. Render fetches fresh NSE and BSE reports, validates them, and stores only the seven supported index series/contracts in its temporary working copy. Manual report-file imports remain laptop-only.
 2. Click **Run analysis** and wait for the task to finish. The prepared file requires index OHLC history for the five NSE underlyings and a current saved analysis. Sensex and Bankex OHLC are optional; missing BSE index history will not block the Drive file.
-3. Click **Prepare market file for Drive**, then **Download prepared market file**. On iPhone, save the ZIP to Files and upload it to the existing separate index market file in Google Drive. Preserve the Drive file ID; if Drive creates a new file, update `INDEX_DRIVE_FILE_ID` in the Render service's private settings.
+3. Click **Prepare market file for Drive**, then **Download prepared market file**. On iPhone, save the ZIP to Files and replace the contents of the existing separate index market file in Google Drive. Preserve the Drive file ID; if Drive creates a new file, update `DEFAULT_DRIVE_FILE_ID` in `cloud_runtime.py` and redeploy.
 4. Return to Render and click **Load saved Google Drive copy**. Confirm replacing the temporary hosted data when prompted. This verifies and reloads the Drive snapshot into the Render copy.
 
 Render's free filesystem is temporary. Downloaded reports and analysis can disappear if the service restarts before the ZIP is uploaded to Drive. Save the ZIP promptly. No GitHub commit or Render redeploy is needed for market-data updates; code changes deploy when pushed to `main`.

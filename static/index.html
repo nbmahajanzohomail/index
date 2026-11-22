@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Index Options Research · After the Close</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="cloud-login" class="cloud-login" hidden>
+    <div class="login-card"><div class="eyebrow">AFTER THE CLOSE · INDEX RESEARCH</div><h1>Sign in to your index dashboard.</h1><p>This hosted research page is private.</p>
+      <form id="cloud-login-form"><label for="cloud-password">Dashboard password<input id="cloud-password" type="password" autocomplete="current-password" required></label><button class="button primary" type="submit">Sign in</button></form>
+      <p id="login-status" role="status"></p>
+    </div>
+  </section>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">A</span><div><div class="eyebrow">AFTER THE CLOSE</div><h1>Index Options Research</h1></div></div>
+      <div class="top-actions"><button class="button quiet" id="cloud-signout" hidden>Sign out</button><span class="local-pill"><i></i><span id="workspace-mode">LOCAL MASTER</span></span><button class="button primary" data-run-analysis>Run analysis</button><button class="button quiet" id="refresh">Refresh</button></div>
+    </header>
+
+    <nav class="page-tabs" aria-label="Research pages" role="tablist"><button class="page-tab active" id="dashboard-tab" data-page="dashboard-page" role="tab" aria-selected="true">Market overview</button><button class="page-tab" id="data-centre-tab" data-page="data-centre-page" role="tab" aria-selected="false">Data centre</button></nav>
+
+    <section id="dashboard-page" role="tabpanel" aria-labelledby="dashboard-tab">
+
+    <section class="intro">
+      <div><div class="eyebrow">SEVEN INDEX UNDERLYINGS · STRIKE AND EXPIRY EVIDENCE</div><h2>Follow index positioning after the close.</h2><p>A separate research desk for Nifty 50, Nifty Bank, Sensex, FINNIFTY, BANKEX, MIDCPNIFTY, and NIFTYNXT50.</p></div>
+      <div class="prototype-note"><strong>Research classifier · v1 baseline</strong><span>Rule score only; probabilities are not calibrated.</span></div>
+    </section>
+
+    <section class="notice"><strong>How to read it</strong><span>The next-session view combines index structure, same-contract futures price/OI, near-spot option premium/OI changes, and same-day context across these seven indices. It is a transparent research hypothesis: OI does not identify who initiated a trade, and the score is not a probability.</span></section>
+
+    <section class="research-date-panel"><label for="research-date">Show index research as of</label><input id="research-date" type="date"><button id="research-latest" class="button" type="button">Latest data</button><span id="research-date-status" role="status">Choose a stored date to limit all index research to that close.</span></section>
+
+    <section class="panel index-picker-panel" aria-label="Index selection">
+      <div class="section-head"><div><div class="eyebrow">FIXED INDEX UNIVERSE</div><h2>Choose an index</h2></div><div class="index-picker-tools"><div id="data-stats" class="data-stats"></div><button class="button primary" data-run-analysis type="button">Run analysis</button></div></div>
+      <div id="index-tiles" class="index-tile-grid"><div class="empty">Loading the seven index tiles…</div></div>
+      <p class="table-foot">Select a tile to show its price history, options expiries, strikes, and futures OI below. The selected date applies across this research page.</p>
+    </section>
+
+    <section class="panel forecast-panel" aria-live="polite">
+      <div class="section-head compact"><div><div class="eyebrow">SELECTED INDEX · NEXT AVAILABLE SESSION</div><h2 id="forecast-title">Next-session view</h2><p id="forecast-meta" class="muted">Run analysis to calculate and save the dated model view.</p></div><span id="forecast-badge" class="state-badge">No forecast saved</span></div>
+      <div id="forecast-scores" class="forecast-score-grid"><div class="empty">A saved forecast will show its separate evidence-group scores here.</div></div>
+      <div class="forecast-evidence-grid"><div><h3>Evidence behind the classification</h3><ul id="forecast-reasons" class="forecast-list"><li>Run analysis after importing index OHLC and derivatives data.</li></ul></div><div><h3>Coverage and interpretation</h3><ul id="forecast-warnings" class="forecast-list"><li>Rule scores are uncalibrated and do not represent probabilities.</li></ul></div></div>
+    </section>
+
+    <section class="positioning-section">
+      <div class="section-head"><div><div class="eyebrow">SELECTED INDEX · AS-OF DATE</div><h2>Options &amp; futures OI analysis</h2><p id="analysis-status" class="muted" role="status">Run analysis to save trading entries across the two months through the selected date.</p></div><button class="button primary" data-run-analysis>Run analysis</button></div>
+      <div class="history-chart-heading"><div><h3>Index close and OI-change trends</h3><p>All four lines share one plot: index close uses the left ₹ axis, while PCR and futures OI percentages share the right % axis. Hover over a date for all values.</p></div><span id="history-chart-range" class="muted"></span></div>
+      <div id="analysis-chart-wrap" class="analysis-chart-wrap"><div class="empty">Run analysis to build the two-month trend chart.</div></div>
+      <div class="table-wrap"><table class="positioning-table" data-sortable><thead><tr><th>Index</th><th>As of · index close</th><th>Option expiry</th><th>PCR OI</th><th>PCR OI 1D change</th><th>Futures expiry</th><th>Futures OI</th><th>Futures OI 1D change</th><th>Futures OI 5D change</th></tr></thead><tbody id="analysis-rows"><tr><td colspan="9" class="empty">Run analysis after loading reports.</td></tr></tbody></table></div>
+      <p class="table-foot analysis-foot">Rows are ordered newest first and include every available index trading session in the two calendar months through the selected as-of date. Missing market data remains —; later dates are excluded.</p>
+      <p class="table-foot analysis-foot">PCR OI uses traded options within ±10% of spot and the nearest expiry 2–90 days away. One-day changes require the same expiry. Five-day futures OI compares up to the three nearest expiries held in common with the session five days earlier; unavailable comparisons show —.</p>
+    </section>
+
+    <section class="detail-grid">
+      <article class="panel detail-panel">
+        <div class="section-head compact"><div><div class="eyebrow">SELECTED INDEX</div><h2 id="detail-title">Nifty 50</h2><p id="detail-subtitle" class="muted">NSE · NIFTY</p></div><span id="trend-badge" class="state-badge">Waiting for data</span></div>
+        <div class="metric-grid" id="metrics"></div>
+        <div class="chart-head"><div><div class="eyebrow">INDEX CLOSE</div><div id="chart-period" class="muted">Recent stored sessions</div></div></div>
+        <div id="chart" class="chart empty-chart">Import index bars to see price history.</div>
+        <div class="expiry-head"><div><div class="eyebrow">EXPIRY SUMMARY</div><h3>Option-chain participation</h3></div><span id="chain-date" class="muted"></span></div>
+        <div class="table-wrap inner-table"><table data-sortable><thead><tr><th>Expiry</th><th>Days to expiry</th><th>Contracts</th><th>CE OI</th><th>PE OI</th><th>PCR OI</th><th>CE ΔOI (1D %)</th><th>PE ΔOI (1D %)</th></tr></thead><tbody id="expiry-rows"><tr><td colspan="8" class="empty">No option rows yet.</td></tr></tbody></table></div>
+        <p class="table-foot analysis-foot">PCR OI percentage is its change versus the previous available option session for the same expiry. CE/PE ΔOI is the absolute OI change; the bracketed percentage is that change divided by the previous session's total OI on that side.</p>
+        <div class="chain-head"><div><div class="eyebrow">OPTION STRIKE MAP</div><h3>Nearest two expiries · strikes within ±10% of spot</h3></div><span class="muted">ATM strike band: ±3%</span></div>
+        <div id="option-expiry-charts" class="option-expiry-charts"><div class="expiry-chart empty-chart">Import option data to see the nearest-expiry chart.</div><div class="expiry-chart empty-chart">The upcoming-expiry chart appears when a second expiry is available.</div></div>
+        <div class="table-wrap inner-table"><table data-sortable><thead><tr><th>Strike</th><th>Expiry</th><th>Option type</th><th>Distance from spot</th><th>Premium</th><th>Traded volume</th><th>Open interest</th><th>OI change</th></tr></thead><tbody id="chain-rows"><tr><td colspan="8" class="empty">Import an option-chain file to populate strikes.</td></tr></tbody></table></div>
+      </article>
+    </section>
+
+    <section class="panel evaluation-panel">
+      <div class="section-head"><div><div class="eyebrow">CHRONOLOGICAL MODEL CHECK</div><h2>How have the frozen rules behaved?</h2><p class="muted">Replays each past session using only data available by that close, then compares with the next imported index session.</p></div><button class="button" id="evaluate-model" type="button">Evaluate selected index</button></div>
+      <p id="evaluation-status" class="muted" role="status">No history evaluation saved for the selected index yet.</p>
+      <div id="evaluation-results" class="evaluation-results"><div class="empty">Run this after importing a longer history. Small samples are shown as diagnostics, not evidence of an edge.</div></div>
+    </section>
+
+    <section class="limits"><div class="eyebrow">MODEL STATUS</div><h2>Explainable index pressure, with confidence kept in check.</h2><p>The frozen v1 rule baseline gives an index-level next-session label: rise, fall, range, no edge, or insufficient data. It shows price, futures, options, and cross-index evidence separately. It does not select a strike or prescribe an option position.</p><p>Confidence stays low until sample history and evidence breadth pass the fixed gates; even “moderate” is explicitly uncalibrated. The historical check reports chronological hit rates and coverage, and does not estimate profit after option costs. No stock symbols, constituent data, or indices outside the seven requested are included.</p></section>
+    </section>
+
+    <section id="data-centre-page" class="data-centre-page" role="tabpanel" aria-labelledby="data-centre-tab" hidden>
+      <div class="section-head data-title"><div><div class="eyebrow">DOWNLOAD · IMPORT · COVERAGE</div><h2>Data centre</h2><p class="muted">Manage the local index-only research library, prepare its Drive snapshot, or load the saved snapshot into the hosted dashboard.</p></div><div class="data-title-actions"><button class="button primary" data-run-analysis>Run analysis</button><button class="button" id="refresh-files">Refresh data status</button></div></div>
+      <p id="analysis-data-status" class="muted analysis-data-status" role="status">No saved analysis yet.</p>
+      <section class="panel cloud-panel" aria-labelledby="cloud-panel-title">
+        <div class="section-head"><div><div class="eyebrow">LAPTOP → GOOGLE DRIVE → RENDER</div><h2 id="cloud-panel-title">Market-data handoff</h2></div><span id="cloud-state-badge" class="state-badge">Checking setup</span></div>
+        <p id="cloud-status" class="muted">Checking the local snapshot and hosted setup…</p>
+        <div id="cloud-local-actions" class="cloud-actions">
+          <button class="button primary" id="cloud-export-button" type="button">Prepare market file for Drive</button>
+          <button class="button" id="cloud-file-button" type="button" disabled>Download prepared market file</button>
+          <span>Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.</span>
+        </div>
+        <div id="cloud-hosted-actions" class="cloud-actions" hidden>
+          <button class="button primary" id="cloud-refresh-button" type="button">Load saved Google Drive copy</button>
+          <span>Update reports on the laptop, publish a new index ZIP to Drive, then load it here.</span>
+        </div>
+      </section>
+      <div class="data-centre-grid">
+        <section class="panel download-panel">
+          <div class="section-head"><div><div class="eyebrow">ON YOUR SCHEDULE</div><h2>Download reports from NSE</h2></div></div>
+          <p><strong>You choose the date range; each request fetches fresh NSE reports for it.</strong> Stored rows are replaced only after the report passes completeness checks. A failed or partial response leaves existing rows intact and can be retried. Nothing downloads in the background.</p>
+          <form id="download-form">
+            <div class="form-row range-fields"><label for="start">From<input id="start" name="start" type="date" required></label><label for="end">Through<input id="end" name="end" type="date" required></label></div>
+            <fieldset class="report-options"><legend>Reports to download</legend><label><input id="download-indexes" type="checkbox" checked> NSE index OHLC history</label><label><input id="download-fo" type="checkbox" checked> NSE index futures and options (UDiFF)</label></fieldset>
+            <button class="button primary" id="download-button" type="submit">Download from NSE ↓</button>
+          </form>
+          <p id="download-status" class="import-status" role="status"></p>
+          <p class="table-foot">Up to 93 calendar days per request. Every selected weekday is fetched again, including dates already in the database. F&amp;O reports are downloaded by trading date. Internet is required; report files are checked in memory and are not saved as raw files.</p>
+          <p class="source-note"><strong>Coverage:</strong> NSE reports provide NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, and NIFTYNXT50. Sensex and BANKEX are BSE indices and must be imported from BSE. The combined NSE F&amp;O report is processed in memory; only the five selected index contracts are saved. The raw all-market ZIP is not stored here.</p>
+          <div class="source-links"><a href="https://www.nseindia.com/all-reports#cr_equity_archives" target="_blank" rel="noopener">NSE index reports ↗</a><a href="https://www.niftyindices.com/reports/historical-data" target="_blank" rel="noopener">NSE Indices history ↗</a><a href="https://www.nseindia.com/all-reports-derivatives#cr_deriv_equity_archives" target="_blank" rel="noopener">NSE F&amp;O reports ↗</a><a href="https://www.nseindia.com/report-detail/fo_eq_security" target="_blank" rel="noopener">Contract-wise F&amp;O history ↗</a><a href="https://marketdata.bseindia.com/" target="_blank" rel="noopener">BSE source · Sensex and BANKEX ↗</a></div>
+        </section>
+        <section class="panel import-panel">
+          <div class="section-head"><div><div class="eyebrow">ALTERNATIVE ROUTE</div><h2>Import a downloaded file</h2></div></div>
+          <p class="muted">Use an official CSV/ZIP when a report download is unavailable, or import BSE data in normalized CSV format. Out-of-universe records are rejected or discarded.</p>
+          <label for="dataset">File contains</label><select id="dataset"><option value="nse_indexes">NSE historical index report (CSV)</option><option value="nse_fo">NSE F&amp;O UDiFF / contract-wise report (ZIP or CSV)</option><option value="indexes">Normalized index OHLC CSV (including BSE)</option><option value="options">Normalized index options CSV</option><option value="futures">Normalized index futures CSV</option></select>
+          <label for="selected-index">Index if the OHLC file has no index-name column</label><select id="selected-index"><option value="NIFTY">Nifty 50 · NIFTY</option><option value="BANKNIFTY">Nifty Bank · BANKNIFTY</option><option value="SENSEX">Sensex · SENSEX</option><option value="FINNIFTY">FINNIFTY</option><option value="BANKEX">BANKEX</option><option value="MIDCPNIFTY">Nifty Midcap Select · MIDCPNIFTY</option><option value="NIFTYNXT50">Nifty Next 50 · NIFTYNXT50</option></select>
+          <label for="csv-file">Choose report file(s)</label><input id="csv-file" type="file" accept=".csv,.zip,text/csv,application/zip" multiple>
+          <label class="inline-check"><input id="filter-import-range" type="checkbox"> Apply the download date range to these files</label>
+          <button class="button primary" id="import-button" type="button">Import selected file(s)</button><div id="import-status" class="import-status" role="status"></div>
+          <details class="format-help"><summary>Normalized CSV columns</summary><p><strong>Index OHLC</strong><code>exchange,underlying,date,open,high,low,close</code></p><p><strong>Options</strong><code>exchange,underlying,date,expiry,strike,option_type,close,volume,oi</code></p><p><strong>Futures</strong><code>exchange,underlying,date,expiry,close,volume,oi</code></p><p>Option/futures files may also include open, high, low, oi_change, and lot_size. CE/PE or Call/Put are accepted.</p></details>
+        </section>
+      </div>
+      <section id="task-panel" class="panel task-panel" hidden><div class="section-head"><div><div class="eyebrow">DATA TASK ACTIVITY</div><h2 id="task-label">Waiting for a data task</h2></div><span class="state-badge" id="task-badge">READY</span></div><div id="progress" class="task-progress" hidden><i></i></div><pre id="task-log" class="task-log"></pre></section>
+      <section class="panel coverage-panel"><div class="section-head"><div><div class="eyebrow">COVERAGE &amp; FRESHNESS</div><h2>Your research library</h2></div></div><div id="data-summary" class="coverage-grid"></div><div id="database-summary" class="database-summary"></div><p id="gaps" class="table-foot"></p><div class="table-wrap"><table data-sortable><thead><tr><th>Trading date</th><th>Dataset</th><th>Index rows/contracts</th><th>Source report</th><th>Imported</th></tr></thead><tbody id="file-list"><tr><td colspan="5" class="empty">No files imported.</td></tr></tbody></table></div></section>
+    </section>
+    <footer>AFTER THE CLOSE <span>Independent local research · No broker connection · No automatic orders</span></footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

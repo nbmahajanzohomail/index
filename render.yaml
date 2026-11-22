@@ -1,0 +1,20 @@
+# Independent Render service for the index-only dashboard.
+services:
+  - type: web
+    name: nse-index-options-research
+    branch: main
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py --no-browser
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: INDEX_DEPLOYMENT
+        value: render
+      - key: INDEX_DASHBOARD_PASSWORD
+        sync: false
+      - key: INDEX_SESSION_SECRET
+        generateValue: true
+      - key: INDEX_DRIVE_FILE_ID
+        sync: false

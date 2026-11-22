@@ -65,9 +65,9 @@ def make_snapshot(app):
             if not latest:
                 raise ValueError('Import index OHLC history before preparing the Drive market file.')
             present = {row[0] for row in target.execute('SELECT DISTINCT underlying FROM index_bars')}
-            missing = sorted(set(app.BY_SYMBOL) - present)
+            missing = sorted(set(app.NSE_UNDERLYINGS) - present)
             if missing:
-                raise ValueError(f'Download BSE index OHLC history from Data centre before preparing the seven-index Drive file. Missing: {", ".join(missing)}.')
+                raise ValueError(f'Download NSE index OHLC history for all five supported NSE indices before preparing the Drive file. Missing: {", ".join(missing)}.')
             analysis = _current_analysis(target, app, latest)
             if not analysis:
                 raise ValueError('Run analysis through the latest stored index date before preparing the Drive market file.')
@@ -96,6 +96,8 @@ def make_snapshot(app):
             'through': latest,
             'from': first,
             'underlyings': sorted(app.BY_SYMBOL),
+            'required_index_ohlc': sorted(app.NSE_UNDERLYINGS),
+            'optional_index_ohlc': sorted(app.BSE_UNDERLYINGS),
             'input_revision': revision,
             'analysis_run_at': analysis['run_at'],
             'counts': counts,
@@ -128,7 +130,7 @@ def status(app):
         revision = app.data_revision(c)
         through = c.execute('SELECT MAX(day) FROM index_bars').fetchone()[0]
         present_underlyings = {row[0] for row in c.execute('SELECT DISTINCT underlying FROM index_bars')}
-        missing_underlyings = sorted(set(app.BY_SYMBOL) - present_underlyings)
+        missing_underlyings = sorted(set(app.NSE_UNDERLYINGS) - present_underlyings)
         source_through = _get(c, 'cloud_source_through') or None
         source_revision = _get(c, 'cloud_source_revision')
         last_export_through = _get(c, 'last_export_through') or None
@@ -165,7 +167,7 @@ def status(app):
         'missing_underlyings': missing_underlyings,
         'export_ready': export_ready,
         'export_mb': round(export_path.stat().st_size / 1048576, 1) if export_ready else None,
-        'export_reason': (f'Download BSE index OHLC history from Data centre before preparing the seven-index file. Missing: {", ".join(missing_underlyings)}.'
+        'export_reason': (f'Download NSE index OHLC history for all five supported NSE indices before preparing the Drive file. Missing: {", ".join(missing_underlyings)}.'
                           if missing_underlyings else
                           'Run current analysis after updating market data.' if not analysis_ready else ''),
     }
@@ -191,8 +193,13 @@ def _validate_database(app, database, manifest):
         if not latest or latest != manifest.get('through'):
             raise ValueError('The Drive file date does not match its manifest; the current data was preserved.')
         present = {row[0] for row in c.execute('SELECT DISTINCT underlying FROM index_bars')}
-        if present != allowed:
-            raise ValueError('The Drive file does not contain OHLC history for all seven supported indices; the current data was preserved.')
+        required_underlyings = set(app.NSE_UNDERLYINGS)
+        if not required_underlyings.issubset(present):
+            missing = ', '.join(sorted(required_underlyings - present))
+            raise ValueError(f'The Drive file is missing required NSE index OHLC history for: {missing}; the current data was preserved.')
+        if (manifest.get('required_index_ohlc', sorted(app.NSE_UNDERLYINGS)) != sorted(app.NSE_UNDERLYINGS)
+                or manifest.get('optional_index_ohlc', sorted(app.BSE_UNDERLYINGS)) != sorted(app.BSE_UNDERLYINGS)):
+            raise ValueError('The Drive file has an incompatible NSE/BSE index data requirement; the current data was preserved.')
         if app.data_revision(c) != manifest.get('input_revision'):
             raise ValueError('The Drive file data revision does not match its manifest; the current data was preserved.')
         analysis = _current_analysis(c, app, latest)

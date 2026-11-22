@@ -25,7 +25,7 @@ Normally, update data on the laptop, run analysis, prepare/download a fresh mark
 ## Update from Render when the laptop is unavailable
 
 1. Open **Data centre** on the hosted dashboard. Choose the date range and report types, then click **Download selected reports**. Render fetches fresh NSE and BSE reports, validates them, and stores only the seven supported index series/contracts in its temporary working copy. Manual report-file imports remain laptop-only.
-2. Click **Run analysis** and wait for the task to finish. The prepared file requires complete index OHLC history for all seven underlyings and a current saved analysis.
+2. Click **Run analysis** and wait for the task to finish. The prepared file requires index OHLC history for the five NSE underlyings and a current saved analysis. Sensex and Bankex OHLC are optional; missing BSE index history will not block the Drive file.
 3. Click **Prepare market file for Drive**, then **Download prepared market file**. On iPhone, save the ZIP to Files and upload it to the existing separate index market file in Google Drive. Preserve the Drive file ID; if Drive creates a new file, update `INDEX_DRIVE_FILE_ID` in the Render service's private settings.
 4. Return to Render and click **Load saved Google Drive copy**. Confirm replacing the temporary hosted data when prompted. This verifies and reloads the Drive snapshot into the Render copy.
 

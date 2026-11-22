@@ -83,15 +83,12 @@
       <section class="panel cloud-panel" aria-labelledby="cloud-panel-title">
         <div class="section-head"><div><div class="eyebrow">INDEX MARKET DATA · DRIVE BACKUP</div><h2 id="cloud-panel-title">Market-data handoff</h2></div><span id="cloud-state-badge" class="state-badge">Checking setup</span></div>
         <p id="cloud-status" class="muted">Checking the local snapshot and hosted setup…</p>
-        <div id="cloud-export-actions" class="cloud-actions">
+        <div id="cloud-button-row" class="cloud-button-row">
           <button class="button primary" id="cloud-export-button" type="button">Prepare market file for Drive</button>
           <button class="button" id="cloud-file-button" type="button" disabled>Download prepared market file</button>
-          <span id="cloud-export-help">Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.</span>
+          <button class="button" id="cloud-refresh-button" type="button" hidden>Load saved Google Drive copy</button>
         </div>
-        <div id="cloud-hosted-actions" class="cloud-actions" hidden>
-          <button class="button primary" id="cloud-refresh-button" type="button">Load saved Google Drive copy</button>
-          <span>After uploading the new ZIP, load the same configured Drive file here. Replace its contents so its file ID stays the same.</span>
-        </div>
+        <p id="cloud-action-help" class="cloud-action-help">Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.</p>
       </section>
       <div id="data-centre-grid" class="data-centre-grid">
         <section class="panel download-panel">

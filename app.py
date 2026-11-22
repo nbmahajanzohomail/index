@@ -28,7 +28,11 @@ ROOT = Path(__file__).resolve().parent
 DATA = ROOT / 'data'
 DB_PATH = DATA / 'index_options_research.sqlite3'
 STATIC = ROOT / 'static'
-HOSTED = os.environ.get('INDEX_DEPLOYMENT', '').lower() == 'render' or os.environ.get('RENDER', '').lower() == 'true'
+LOCAL_MODE = '--local' in sys.argv
+HOSTED = not LOCAL_MODE and (
+    os.environ.get('INDEX_DEPLOYMENT', '').lower() == 'render'
+    or os.environ.get('RENDER', '').lower() == 'true'
+)
 HOST = '0.0.0.0' if HOSTED else '127.0.0.1'
 PORT = int(os.environ.get('PORT', '10000')) if HOSTED else 0
 ACTIVE_PORT = PORT

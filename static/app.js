@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 let state = null;
 let selected = 'NIFTY';
 let jobPoller = null;
+let jobPollInFlight = false;
 let researchDateReady = false;
 let hosted = false;
 let authToken = '';
@@ -632,7 +633,15 @@ function renderJob(job = {}) {
   document.querySelectorAll('[data-run-analysis]').forEach((button) => { button.disabled = busy; });
   if (busy && !jobPoller) {
     jobPoller = setInterval(async () => {
-      await refresh();
+      if (jobPollInFlight) return;
+      jobPollInFlight = true;
+      try {
+        await pollJobStatus();
+      } catch (error) {
+        $('task-label').textContent = `Reconnecting to task status… ${error.message}`;
+      } finally {
+        jobPollInFlight = false;
+      }
     }, 1400);
   } else if (!job.running && !restorePending && jobPoller) {
     clearInterval(jobPoller);
@@ -642,6 +651,16 @@ function renderJob(job = {}) {
     $('download-status').textContent = job.message;
     $('download-status').className = `import-status ${job.error ? 'error' : job.running ? '' : 'success'}`;
   }
+}
+
+async function pollJobStatus() {
+  const response = await apiFetch('/api/job');
+  const job = await response.json();
+  if (!response.ok) throw new Error(job.error || 'Could not read task status.');
+  state.job = job;
+  renderJob(job);
+  renderCloud(state.cloud || {}, job);
+  if (!job.running && !startupDriveRestorePending(state.cloud, job)) await refresh();
 }
 
 async function prepareCloudFile() {

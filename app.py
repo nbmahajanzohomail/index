@@ -42,6 +42,7 @@ MAX_UNPACKED_UPLOAD = 180_000_000
 MAX_DOWNLOAD_DAYS = 93
 JOB_LOCK = threading.Lock()
 TASK_LOCK = threading.Lock()
+DATABASE_SWAP_LOCK = threading.Lock()
 JOB = {'running': False, 'kind': '', 'message': '', 'log': [], 'error': False}
 
 
@@ -158,13 +159,13 @@ def connect():
     DATA.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(DB_PATH, timeout=30, factory=ClosingConnection)
     c.row_factory = sqlite3.Row
-    c.execute('PRAGMA journal_mode=WAL')
     return c
 
 
 def init_db():
     DATA.mkdir(parents=True, exist_ok=True)
     with connect() as c:
+        c.execute('PRAGMA journal_mode=WAL')
         c.executescript(SCHEMA)
 
 
@@ -811,14 +812,13 @@ def index_state(c, item, as_of=None):
             'chain': selected_chain, 'expiries': expiries}
 
 
-def option_oi_snapshot(c, symbol, day, spot):
+def option_oi_summary(rows, day, spot):
     if not day or not spot or spot <= 0:
         return None
-    rows = c.execute('''SELECT expiry,strike,option_type,close,volume,oi FROM option_bars
-        WHERE underlying=? AND day=? AND volume>0 AND oi>0 AND close>0
-        ORDER BY expiry,strike,option_type''', (symbol, day)).fetchall()
     eligible = []
     for row in rows:
+        if not row['volume'] or row['volume'] <= 0 or not row['oi'] or row['oi'] <= 0 or not row['close'] or row['close'] <= 0:
+            continue
         dte = (dt.date.fromisoformat(row['expiry']) - dt.date.fromisoformat(day)).days
         if 2 <= dte <= 90 and abs(row['strike'] / spot - 1) <= 0.10:
             eligible.append(row)
@@ -830,6 +830,14 @@ def option_oi_snapshot(c, symbol, day, spot):
     puts = sum(row['oi'] for row in chain if row['option_type'] == 'PE')
     return {'expiry': expiry, 'pcr_oi': rounded(puts / calls) if calls > 0 else None,
             'call_oi': calls, 'put_oi': puts, 'contracts': len(chain)}
+
+
+def option_oi_snapshot(c, symbol, day, spot):
+    if not day or not spot or spot <= 0:
+        return None
+    rows = c.execute('''SELECT expiry,strike,option_type,close,volume,oi FROM option_bars
+        WHERE underlying=? AND day=? ORDER BY expiry,strike,option_type''', (symbol, day)).fetchall()
+    return option_oi_summary(rows, day, spot)
 
 
 def futures_oi_snapshot(c, symbol, day, traded_only=True):
@@ -924,12 +932,115 @@ def subtract_calendar_months(day, months):
 
 
 def analysis_history(c, item, as_of, months=2):
-    """Return all trading sessions in the two calendar months through as_of, newest first."""
+    """Return two months of daily OI metrics using one bulk read per source table."""
+    symbol = item['underlying']
     start_day = subtract_calendar_months(as_of, months)
-    days = [row['day'] for row in c.execute('''SELECT day FROM index_bars
-        WHERE underlying=? AND day>=? AND day<=? ORDER BY day DESC''',
-        (item['underlying'], start_day, as_of)).fetchall()]
-    return [analysis_metrics(c, item, day) for day in days]
+    prior_cash = [dict(row) for row in c.execute('''SELECT day,close FROM index_bars
+        WHERE underlying=? AND day<? ORDER BY day DESC LIMIT 6''', (symbol, start_day)).fetchall()]
+    prior_cash.reverse()
+    history_cash = [dict(row) for row in c.execute('''SELECT day,close FROM index_bars
+        WHERE underlying=? AND day>=? AND day<=? ORDER BY day''', (symbol, start_day, as_of)).fetchall()]
+    if not history_cash:
+        return []
+    cash_rows = prior_cash + history_cash
+    data_start = cash_rows[0]['day']
+
+    option_summaries_by_day = {}
+    for row in c.execute('''SELECT o.day,o.expiry,
+            SUM(CASE WHEN o.option_type='CE' THEN o.oi ELSE 0 END) AS call_oi,
+            SUM(CASE WHEN o.option_type='PE' THEN o.oi ELSE 0 END) AS put_oi,
+            COUNT(*) AS contracts
+        FROM option_bars o JOIN index_bars i
+          ON i.exchange=o.exchange AND i.underlying=o.underlying AND i.day=o.day
+        WHERE o.underlying=? AND o.day>=? AND o.day<=?
+          AND o.volume>0 AND o.oi>0 AND o.close>0
+          AND julianday(o.expiry)-julianday(o.day) BETWEEN 2 AND 90
+          AND ABS(o.strike/i.close-1)<=0.10
+        GROUP BY o.day,o.expiry ORDER BY o.day,o.expiry''',
+        (symbol, data_start, as_of)).fetchall():
+        option_summaries_by_day.setdefault(row['day'], []).append(dict(row))
+
+    futures_rows_by_day = {}
+    for row in c.execute('''SELECT day,expiry,oi,volume,lot_size FROM futures_bars
+        WHERE underlying=? AND day>=? AND day<=? ORDER BY day,expiry''',
+        (symbol, data_start, as_of)).fetchall():
+        futures_rows_by_day.setdefault(row['day'], []).append(dict(row))
+
+    def future_snapshot(day):
+        return [row for row in futures_rows_by_day.get(day, [])
+                if row['expiry'] > day and row['volume'] is not None and row['volume'] > 0]
+
+    def option_snapshot(day):
+        candidates = option_summaries_by_day.get(day, [])
+        if not candidates:
+            return None
+        chosen = min(candidates, key=lambda row: row['expiry'])
+        calls, puts = chosen['call_oi'], chosen['put_oi']
+        return {'expiry': chosen['expiry'], 'pcr_oi': rounded(puts / calls) if calls > 0 else None,
+                'call_oi': calls, 'put_oi': puts, 'contracts': chosen['contracts']}
+
+    output = []
+    for position, cash in enumerate(cash_rows):
+        day = cash['day']
+        if day < start_day:
+            continue
+        spot = cash['close']
+        previous = cash_rows[position - 1] if position else None
+        previous_day = previous['day'] if previous else None
+        five_day_start = cash_rows[position - 5]['day'] if position >= 5 else None
+        index_close_1d_pct = (rounded((spot / previous['close'] - 1) * 100)
+                              if previous and previous['close'] else None)
+
+        current_options = option_snapshot(day)
+        prior_options = option_snapshot(previous_day) if previous else None
+        pcr_change = None
+        if (current_options and prior_options and current_options['expiry'] == prior_options['expiry']
+                and prior_options['pcr_oi'] is not None and prior_options['pcr_oi'] > 0
+                and current_options['pcr_oi'] is not None):
+            pcr_change = rounded((current_options['pcr_oi'] - prior_options['pcr_oi']) /
+                                 abs(prior_options['pcr_oi']) * 100)
+
+        current_futures = future_snapshot(day)
+        nearest = current_futures[0] if current_futures else None
+        prior_futures = future_snapshot(previous_day) if previous_day else []
+        prior_nearest = prior_futures[0] if prior_futures else None
+        futures_1d = None
+        if nearest and prior_nearest and nearest['expiry'] == prior_nearest['expiry']:
+            old_oi = prior_nearest['oi']
+            if old_oi is not None and old_oi > 0 and nearest['oi'] is not None:
+                futures_1d = rounded((nearest['oi'] - old_oi) / old_oi * 100)
+
+        futures_5d = None
+        observations = 0
+        if position >= 5:
+            window = cash_rows[position - 5:position + 1]
+            observations = sum(bool(futures_rows_by_day.get(row['day'])) for row in window)
+            old_rows = {row['expiry']: row for row in futures_rows_by_day.get(five_day_start, [])}
+            matched = []
+            for future in current_futures[:3]:
+                old = old_rows.get(future['expiry'])
+                if not old or old['oi'] is None or old['oi'] <= 0 or future['oi'] is None:
+                    continue
+                if future['lot_size'] and old['lot_size'] and future['lot_size'] != old['lot_size']:
+                    continue
+                matched.append((future, old))
+            old_total = sum(old['oi'] for _, old in matched)
+            new_total = sum(now['oi'] for now, _ in matched)
+            if matched and old_total > 0:
+                futures_5d = rounded((new_total - old_total) / old_total * 100)
+
+        output.append({**item, 'day': day, 'index_close': rounded(spot, 2),
+                       'index_close_1d_pct': index_close_1d_pct,
+                       'option_expiry': current_options['expiry'] if current_options else None,
+                       'pcr_oi': current_options['pcr_oi'] if current_options else None,
+                       'pcr_oi_1d_pct': pcr_change,
+                       'futures_expiry': nearest['expiry'] if nearest else None,
+                       'futures_oi': nearest['oi'] if nearest else None,
+                       'futures_oi_1d_pct': futures_1d,
+                       'futures_oi_5d_pct': futures_5d,
+                       'futures_5d_observations': observations,
+                       'futures_5d_start_day': five_day_start})
+    return list(reversed(output))
 
 
 def data_revision(c, as_of=None):
@@ -948,10 +1059,10 @@ def data_revision(c, as_of=None):
     return json.dumps(revision, sort_keys=True)
 
 
-def save_forecast(c, forecast):
+def save_forecast(c, forecast, revision=None):
     if not forecast.get('as_of'):
         return None
-    revision = data_revision(c, forecast['as_of'])
+    revision = revision or data_revision(c, forecast['as_of'])
     created_at = dt.datetime.now().astimezone().isoformat(timespec='seconds')
     c.execute('''INSERT OR IGNORE INTO index_forecasts
         (underlying,exchange,as_of,model_version,input_revision,direction,confidence,net_score,forecast_json,created_at)
@@ -1008,9 +1119,13 @@ def run_analysis(as_of=None):
         if not available:
             raise ValueError('Import index OHLC data before running analysis.')
         as_of = max(row['day'] for row in available)
+        revision_cache = {}
         for row in results:
             if row['forecast'].get('as_of'):
-                save_forecast(c, row['forecast'])
+                forecast_day = row['forecast']['as_of']
+                if forecast_day not in revision_cache:
+                    revision_cache[forecast_day] = data_revision(c, forecast_day)
+                save_forecast(c, row['forecast'], revision_cache[forecast_day])
         # Historical date selections are read-only research snapshots. Forecast outcomes
         # can only mature when analysing the latest imported session, so avoid scanning
         # the full forecast history on every historical date change (local and Render).
@@ -1018,7 +1133,7 @@ def run_analysis(as_of=None):
                                (dt.date.today().isoformat(),)).fetchone()[0]
         if as_of == latest_day:
             mature_forecasts(c, as_of)
-        revision = data_revision(c, as_of)
+        revision = revision_cache.get(as_of) or data_revision(c, as_of)
         run_at = dt.datetime.now().astimezone().isoformat(timespec='seconds')
         c.execute('INSERT INTO analysis_runs(run_at,as_of,input_revision,results_json) VALUES(?,?,?,?)',
                   (run_at, as_of, revision, json.dumps(results, ensure_ascii=False)))
@@ -1054,8 +1169,12 @@ def run_evaluation(underlying, as_of=None):
     job_log(evaluation['replay_note'])
 
 
-def get_state(as_of=None):
-    init_db()
+def get_job():
+    with JOB_LOCK:
+        return {**JOB, 'log': list(JOB.get('log') or [])}
+
+
+def _read_state(as_of=None):
     with connect() as c:
         today = dt.date.today().isoformat()
         date_limits = c.execute('SELECT MIN(day) AS first,MAX(day) AS latest FROM index_bars WHERE day<=?', (today,)).fetchone()
@@ -1112,8 +1231,7 @@ def get_state(as_of=None):
                 evaluation['stale'] = saved_evaluation['input_revision'] != data_revision(c, evaluation['as_of'])
                 evaluations[item['underlying']] = evaluation
         database_path = DB_PATH.stat().st_size if DB_PATH.exists() else 0
-        with JOB_LOCK:
-            job = {**JOB, 'log': list(JOB.get('log') or [])}
+        job = get_job()
         return {'universe': UNIVERSE, 'indexes': indexes, 'counts': counts, 'coverage': coverage, 'files': files,
                 'database': {'name': DB_PATH.name, 'path': 'Temporary hosted copy' if HOSTED else str(DB_PATH),
                              'size_mb': round(database_path / 1048576, 1)},
@@ -1123,6 +1241,12 @@ def get_state(as_of=None):
                 'port': ACTIVE_PORT, 'mode': 'HOSTED WORKING COPY' if HOSTED else 'LOCAL MASTER',
                 'cloud': cloud_runtime.status(sys.modules[__name__]),
                 'model_status': f'{index_engine.MODEL_VERSION} · rule-based · not probability-calibrated'}
+
+
+def get_state(as_of=None):
+    # Keep reads out of the short atomic window where the hosted SQLite snapshot is replaced.
+    with DATABASE_SWAP_LOCK:
+        return _read_state(as_of)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1167,6 +1291,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({'hosted': HOSTED})
         if path.startswith('/api/') and not self.authorized():
             return self.send_json({'error': 'Sign in to the index research dashboard.'}, 401)
+        if path == '/api/job':
+            return self.send_json(get_job())
         if path == '/api/state':
             try:
                 query = parse_qs(parsed.query)

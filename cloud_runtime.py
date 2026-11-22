@@ -218,9 +218,10 @@ def _validate_database(app, database, manifest):
         c.close()
 
 
-def install_snapshot(app, archive_path):
+def install_snapshot(app, archive_path, archive_sha256=None):
     """Validate the complete archive before atomically replacing the hosted copy."""
     app.DATA.mkdir(parents=True, exist_ok=True)
+    archive_sha256 = archive_sha256 or _digest(archive_path)
     with tempfile.TemporaryDirectory(dir=app.DATA) as work:
         staged = Path(work) / DATABASE_NAME
         with zipfile.ZipFile(archive_path) as archive:
@@ -251,23 +252,26 @@ def install_snapshot(app, archive_path):
                       ('cloud_source_revision', manifest['input_revision']))
             c.execute('INSERT OR REPLACE INTO cloud_state(key,value) VALUES(?,?)',
                       ('cloud_source_created_at', manifest['created_at']))
+            c.execute('INSERT OR REPLACE INTO cloud_state(key,value) VALUES(?,?)',
+                      ('cloud_source_archive_sha256', archive_sha256))
             c.commit()
         finally:
             staged_connection.close()
         staged_target = app.DATA / (app.DB_PATH.name + '.incoming')
         shutil.copyfile(staged, staged_target)
         try:
-            old = app.connect()
-            try:
-                old.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-            finally:
-                old.close()
-            for suffix in ('-wal', '-shm'):
-                Path(str(app.DB_PATH) + suffix).unlink(missing_ok=True)
-            os.replace(staged_target, app.DB_PATH)
+            with app.DATABASE_SWAP_LOCK:
+                old = app.connect()
+                try:
+                    old.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+                finally:
+                    old.close()
+                for suffix in ('-wal', '-shm'):
+                    Path(str(app.DB_PATH) + suffix).unlink(missing_ok=True)
+                os.replace(staged_target, app.DB_PATH)
+                app.init_db()
         finally:
             staged_target.unlink(missing_ok=True)
-    app.init_db()
     app.job_log(f'Saved Google Drive index snapshot loaded · through {latest}.')
     return manifest
 
@@ -286,4 +290,11 @@ def refresh_drive(app, discard=False):
         result = gdown.download(id=file_id, output=str(path), quiet=True, use_cookies=False)
         if not result or not path.exists() or not path.stat().st_size or path.stat().st_size > MAX_DRIVE_BYTES:
             raise ValueError('Google Drive download failed or exceeded the configured file limit. Check that the separate market ZIP is accessible and retry.')
-        return install_snapshot(app, path)
+        archive_sha256 = _digest(path)
+        if not current['unsaved_market_changes']:
+            with app.connect() as c:
+                already_loaded = _get(c, 'cloud_source_archive_sha256') == archive_sha256
+            if already_loaded:
+                app.job_log('The saved Google Drive copy is already loaded; the database was left in place.')
+                return {'already_loaded': True}
+        return install_snapshot(app, path, archive_sha256)

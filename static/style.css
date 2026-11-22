@@ -124,6 +124,8 @@ svg.analysis-history-svg{display:block;width:100%;min-width:790px;height:auto}
 .cloud-actions>span{flex:1 1 290px;color:#68776f;font-size:10px;line-height:1.5}
 .cloud-actions[hidden]{display:none}
 #data-centre-grid[hidden]{display:none}
+.data-centre-grid.hosted-data{grid-template-columns:1fr}
+.import-panel[hidden]{display:none}
 @media(max-width:640px){.research-date-panel{align-items:stretch;gap:8px}.research-date-panel label,.research-date-panel input,.research-date-panel button,.research-date-panel span{width:100%;min-width:0}.index-picker-panel{padding:15px}.index-picker-panel .section-head{align-items:flex-start;flex-direction:column}.index-picker-tools{width:100%;justify-content:space-between}.index-tile-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.index-tile{padding:9px;min-height:117px}.index-tile strong{font-size:17px}}
 @media(max-width:900px){.data-centre-grid{grid-template-columns:1fr}}
 @media(max-width:640px){.page-tabs{gap:0}.page-tab{flex:1;padding:11px 5px;font-size:12px}.range-fields{grid-template-columns:1fr 1fr}.report-options{flex-direction:column}.coverage-grid{grid-template-columns:1fr}.coverage-panel .table-wrap table{min-width:680px}}

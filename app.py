@@ -1164,8 +1164,6 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 return self.send_json({'error': str(exc)}, 500)
         if path == '/api/cloud/file':
-            if HOSTED:
-                return self.send_json({'error': 'Market snapshots are prepared and downloaded from the laptop project.'}, 403)
             return self.send_file(DATA / cloud_runtime.ARCHIVE_NAME, 'Index Options Market.zip')
         files = {'/': ('index.html', 'text/html; charset=utf-8'),
                  '/app.js': ('app.js', 'text/javascript; charset=utf-8'),
@@ -1202,8 +1200,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({'error': 'Sign in to the index research dashboard.'}, 401)
         if HOSTED and not ACCESS.origin_allowed(self.headers.get('Origin', '')):
             return self.send_json({'error': 'Origin not allowed.'}, 403)
-        if HOSTED and path in ('/api/import', '/api/download'):
-            return self.send_json({'error': 'Update market data on the laptop, prepare a new Drive snapshot, then load it here.'}, 403)
+        if HOSTED and path == '/api/import':
+            return self.send_json({'error': 'Manual report-file imports are available on the laptop. Use the hosted report downloader to update this copy.'}, 403)
         try:
             length = int(self.headers.get('Content-Length', '0'))
             limit = MAX_UPLOAD if path == '/api/import' else 4096
@@ -1211,8 +1209,6 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('Choose a report file under 60 MB.' if path == '/api/import' else 'Invalid request.')
             body = self.rfile.read(length)
             if path == '/api/cloud/export':
-                if HOSTED:
-                    raise ValueError('Prepare the market file on the laptop, where the full local history is stored.')
                 start_job(lambda: cloud_runtime.make_snapshot(sys.modules[__name__]),
                           message='Preparing the index-only Google Drive market file…', kind='cloud_export')
                 return self.send_json({'ok': True, 'accepted': True}, 202)

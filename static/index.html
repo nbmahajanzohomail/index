@@ -78,19 +78,19 @@
     </section>
 
     <section id="data-centre-page" class="data-centre-page" role="tabpanel" aria-labelledby="data-centre-tab" hidden>
-      <div class="section-head data-title"><div><div class="eyebrow">DOWNLOAD · IMPORT · COVERAGE</div><h2>Data centre</h2><p class="muted">Manage the local index-only research library, prepare its Drive snapshot, or load the saved snapshot into the hosted dashboard.</p></div><div class="data-title-actions"><button class="button primary" data-run-analysis>Run analysis</button><button class="button" id="refresh-files">Refresh data status</button></div></div>
+      <div class="section-head data-title"><div><div class="eyebrow">DOWNLOAD · IMPORT · COVERAGE</div><h2>Data centre</h2><p class="muted">Manage the seven-index research library, prepare its separate Drive file, or load the saved file into this dashboard.</p></div><div class="data-title-actions"><button class="button primary" data-run-analysis>Run analysis</button><button class="button" id="refresh-files">Refresh data status</button></div></div>
       <p id="analysis-data-status" class="muted analysis-data-status" role="status">No saved analysis yet.</p>
       <section class="panel cloud-panel" aria-labelledby="cloud-panel-title">
-        <div class="section-head"><div><div class="eyebrow">LAPTOP → GOOGLE DRIVE → RENDER</div><h2 id="cloud-panel-title">Market-data handoff</h2></div><span id="cloud-state-badge" class="state-badge">Checking setup</span></div>
+        <div class="section-head"><div><div class="eyebrow">INDEX MARKET DATA · DRIVE BACKUP</div><h2 id="cloud-panel-title">Market-data handoff</h2></div><span id="cloud-state-badge" class="state-badge">Checking setup</span></div>
         <p id="cloud-status" class="muted">Checking the local snapshot and hosted setup…</p>
-        <div id="cloud-local-actions" class="cloud-actions">
+        <div id="cloud-export-actions" class="cloud-actions">
           <button class="button primary" id="cloud-export-button" type="button">Prepare market file for Drive</button>
           <button class="button" id="cloud-file-button" type="button" disabled>Download prepared market file</button>
-          <span>Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.</span>
+          <span id="cloud-export-help">Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.</span>
         </div>
         <div id="cloud-hosted-actions" class="cloud-actions" hidden>
           <button class="button primary" id="cloud-refresh-button" type="button">Load saved Google Drive copy</button>
-          <span>Update reports on the laptop, publish a new index ZIP to Drive, then load it here.</span>
+          <span>After uploading the new ZIP, load the same configured Drive file here. Replace its contents so its file ID stays the same.</span>
         </div>
       </section>
       <div id="data-centre-grid" class="data-centre-grid">
@@ -103,11 +103,12 @@
             <button class="button primary" id="download-button" type="submit">Download selected reports ↓</button>
           </form>
           <p id="download-status" class="import-status" role="status"></p>
-          <p class="table-foot">Up to 93 calendar days per request. Selected NSE and BSE reports are refreshed for the same range, including dates already in the database. F&amp;O reports are fetched by trading date, checked in memory, and filtered to the five NSE plus two BSE indices; raw all-market files are not saved.</p>
+          <p id="download-storage-note" class="table-foot">Up to 93 calendar days per request. Selected NSE and BSE reports are refreshed for the same range, including dates already in the database. F&amp;O reports are fetched by trading date, checked in memory, and filtered to the five NSE plus two BSE indices; raw all-market files are not saved.</p>
+          <p id="hosted-temporary-note" class="table-foot" style="display:none">Render’s working copy uses temporary storage. After downloading reports and running analysis, prepare and download the index ZIP, upload it to the same configured Drive file, then load that saved copy here.</p>
           <p class="source-note"><strong>Coverage:</strong> NSE reports supply NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, and NIFTYNXT50. BSE supplies Sensex and Bankex. Both exchanges' combined derivatives bhavcopies are processed in memory, and only the seven selected index contracts are stored.</p>
           <div class="source-links"><a href="https://www.nseindia.com/all-reports#cr_equity_archives" target="_blank" rel="noopener">NSE index reports ↗</a><a href="https://www.niftyindices.com/reports/historical-data" target="_blank" rel="noopener">NSE Indices history ↗</a><a href="https://www.nseindia.com/all-reports-derivatives#cr_deriv_equity_archives" target="_blank" rel="noopener">NSE F&amp;O reports ↗</a><a href="https://www.nseindia.com/report-detail/fo_eq_security" target="_blank" rel="noopener">Contract-wise F&amp;O history ↗</a><a href="https://www.bseindia.com/indices/IndexArchiveData.html" target="_blank" rel="noopener">BSE index history ↗</a><a href="https://www.bseindia.com/markets/Derivatives/DeriReports/DailyBhavCopy.aspx" target="_blank" rel="noopener">BSE derivatives bhavcopy ↗</a></div>
         </section>
-        <section class="panel import-panel">
+        <section id="manual-import-panel" class="panel import-panel">
           <div class="section-head"><div><div class="eyebrow">ALTERNATIVE ROUTE</div><h2>Import a downloaded file</h2></div></div>
           <p class="muted">Use an official CSV/ZIP if an exchange download is unavailable. Normalized CSV imports remain available as a fallback. Out-of-universe records are rejected or discarded.</p>
           <label for="dataset">File contains</label><select id="dataset"><option value="nse_indexes">NSE historical index report (CSV)</option><option value="nse_fo">NSE F&amp;O UDiFF / contract-wise report (ZIP or CSV)</option><option value="indexes">Normalized index OHLC CSV (including BSE)</option><option value="options">Normalized index options CSV</option><option value="futures">Normalized index futures CSV</option></select>

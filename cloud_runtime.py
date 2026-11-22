@@ -146,18 +146,21 @@ def status(app):
                 export_info = json.loads(archive.read('manifest.json'))
         except (OSError, ValueError, KeyError, zipfile.BadZipFile):
             export_info = None
-    export_ready = bool(not app.HOSTED and analysis_ready and not missing_underlyings and export_info
+    export_ready = bool(analysis_ready and not missing_underlyings and export_info
                         and export_info.get('format') == FORMAT
                         and export_info.get('input_revision') == revision
                         and export_info.get('analysis_run_at') == analysis_run_at)
     baseline = source_revision if app.HOSTED else (last_export_revision or source_revision)
+    revision_data = json.loads(revision)
+    has_market_data = any(item['rows'] for key, item in revision_data.items()
+                          if key in ('index', 'options', 'futures'))
     return {
         'hosted': app.HOSTED,
         'drive_configured': bool(os.environ.get('INDEX_DRIVE_FILE_ID')),
         'saved_through': source_through,
         'last_export_through': last_export_through,
         'last_export_created_at': last_export_created_at,
-        'unsaved_market_changes': bool(baseline and baseline != revision),
+        'unsaved_market_changes': bool(has_market_data and baseline != revision),
         'analysis_ready': analysis_ready,
         'missing_underlyings': missing_underlyings,
         'export_ready': export_ready,

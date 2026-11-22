@@ -20,6 +20,13 @@ The Render service reads only its own `INDEX_*` settings. Never put passwords, s
 
 ## Daily data update
 
-On the laptop, download/import current reports, run analysis, prepare/download a fresh market ZIP, and upload it to the same separate index Drive file. On Render, click **Load saved Google Drive copy**. No GitHub commit or Render redeploy is needed for market-data updates. Code changes are deployed by pushing to `main`.
+Normally, update data on the laptop, run analysis, prepare/download a fresh market ZIP, and upload it to the same separate index Drive file. On Render, click **Load saved Google Drive copy**. No GitHub commit or Render redeploy is needed for market-data updates.
 
-The hosted database is temporary on Render's free plan. The separate Drive ZIP is its recovery source; hosted report downloads and file imports are disabled so the laptop remains the master.
+## Update from Render when the laptop is unavailable
+
+1. Open **Data centre** on the hosted dashboard. Choose the date range and report types, then click **Download selected reports**. Render fetches fresh NSE and BSE reports, validates them, and stores only the seven supported index series/contracts in its temporary working copy. Manual report-file imports remain laptop-only.
+2. Click **Run analysis** and wait for the task to finish. The prepared file requires complete index OHLC history for all seven underlyings and a current saved analysis.
+3. Click **Prepare market file for Drive**, then **Download prepared market file**. On iPhone, save the ZIP to Files and upload it to the existing separate index market file in Google Drive. Preserve the Drive file ID; if Drive creates a new file, update `INDEX_DRIVE_FILE_ID` in the Render service's private settings.
+4. Return to Render and click **Load saved Google Drive copy**. Confirm replacing the temporary hosted data when prompted. This verifies and reloads the Drive snapshot into the Render copy.
+
+Render's free filesystem is temporary. Downloaded reports and analysis can disappear if the service restarts before the ZIP is uploaded to Drive. Save the ZIP promptly. No GitHub commit or Render redeploy is needed for market-data updates; code changes deploy when pushed to `main`.

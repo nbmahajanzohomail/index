@@ -43,14 +43,14 @@ Option and futures files may also include `open,high,low,oi_change,lot_size`. Da
 
 ## Hosted Render copy and Google Drive updates
 
-The laptop database remains the master. The hosted dashboard is a temporary working copy, separate from the stock dashboard and its Drive file.
+The laptop database remains the primary copy. Render is a temporary working copy, separate from the stock dashboard and its Drive file. Render can also download the exchange reports directly when the laptop is unavailable.
 
 1. On the laptop, download/import the market reports and run analysis through the latest stored index date.
 2. In **Data centre**, click **Prepare market file for Drive**, then **Download prepared market file**. This creates a ZIP containing the index-only SQLite database and a manifest with its date, counts, and SHA-256 checksum. It contains no company symbols or personal data.
 3. Upload that ZIP to a **separate file** in the same Google Drive account. Set Drive access so the hosted downloader can read that market-only file. Put its file ID in the Render service's private `INDEX_DRIVE_FILE_ID` setting. Do not use the stock dashboard's Drive file ID.
-4. Push code to the separate GitHub repository to deploy code changes. Daily data updates do not require a GitHub commit: upload the new ZIP to Drive, then use **Load saved Google Drive copy** on the hosted dashboard.
+4. Push code to the separate GitHub repository to deploy code changes. Daily data updates do not require a GitHub commit.
 
-The hosted service attempts to restore the configured Drive file when its database is empty. Render's free filesystem is temporary, so Drive is the hosted copy's recovery source. Analysis can run online, but market report downloads/imports and publishing a new master snapshot happen on the laptop. The Render dashboard has its own sign-in password and session secret; set these in Render, never in GitHub.
+When the laptop is unavailable, use the Render Data centre to download reports, run analysis, prepare and download the index-only ZIP to your phone, and upload it to the same separate Drive file. Then click **Load saved Google Drive copy**. Replace the existing Drive file while preserving its file ID; if Drive creates a new file instead, update `INDEX_DRIVE_FILE_ID` in the Render service settings. Render's free filesystem is temporary, so save a fresh snapshot to Drive before the hosted service restarts. Manual file imports remain laptop-only. The Render dashboard has its own sign-in password and session secret; set these in Render, never in GitHub.
 
 The index project needs its own Render web service and URL in the same Render workspace. Its `render.yaml` defines the service, health check, build/start commands, and separate `INDEX_*` settings. Create the GitHub repository under the intended account and grant Render access to that repository. Do not commit files from `data/`; the Git ignore rules exclude the local database, market ZIP, and report files.
 

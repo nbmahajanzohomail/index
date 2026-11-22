@@ -303,38 +303,62 @@ function renderCoverage(coverage, database) {
 
 function renderCloud(cloud, job) {
   const running = !!job.running;
-  $('workspace-mode').textContent = cloud.hosted ? 'HOSTED COPY' : 'LOCAL MASTER';
-  $('cloud-signout').hidden = !cloud.hosted;
-  $('cloud-local-actions').hidden = !!cloud.hosted;
-  $('cloud-hosted-actions').hidden = !cloud.hosted;
-  $('data-centre-grid').hidden = !!cloud.hosted;
+  const hostedCopy = !!cloud.hosted;
+  $('workspace-mode').textContent = hostedCopy ? 'HOSTED COPY' : 'LOCAL MASTER';
+  $('cloud-signout').hidden = !hostedCopy;
+  $('cloud-export-actions').hidden = false;
+  $('cloud-hosted-actions').hidden = !hostedCopy;
+  $('data-centre-grid').hidden = false;
+  $('data-centre-grid').classList.toggle('hosted-data', hostedCopy);
+  $('manual-import-panel').hidden = hostedCopy;
+  $('hosted-temporary-note').style.display = hostedCopy ? '' : 'none';
+  $('cloud-export-help').textContent = hostedCopy
+    ? 'On Render: download reports, run analysis, prepare this ZIP, then download it to your phone and upload it to the same separate Drive file. Load that saved copy back here afterward.'
+    : 'Upload the downloaded index ZIP as a separate file in your Google Drive. This does not update the stock dashboard’s file.';
+  $('cloud-export-button').disabled = running || !cloud.analysis_ready || !!cloud.missing_underlyings?.length;
+  $('cloud-file-button').disabled = running || !cloud.export_ready;
+  $('cloud-file-button').textContent = cloud.export_ready ? `Download prepared market file (${cloud.export_mb} MB)` : 'Download prepared market file';
+  $('cloud-refresh-button').disabled = running || !cloud.drive_configured;
   const badge = $('cloud-state-badge');
-  if (cloud.hosted) {
-    badge.textContent = job.kind === 'cloud_refresh' && running ? 'LOADING FROM DRIVE'
-      : cloud.drive_configured ? (cloud.saved_through ? 'DRIVE SNAPSHOT LOADED' : 'WAITING FOR DRIVE') : 'DRIVE SETUP NEEDED';
-    badge.className = `state-badge ${cloud.saved_through ? 'up' : ''}`;
-    $('cloud-status').textContent = cloud.saved_through
-      ? `Hosted working copy loaded from the separate index snapshot through ${cloud.saved_through}. Any refreshed copy must come from the laptop project.`
-      : cloud.drive_configured
-        ? 'No market snapshot is loaded yet. The service will try the configured Drive file when it starts; you can also load it now.'
-        : 'Add the separate index ZIP file ID in this Render service’s private settings to enable Drive loading.';
-    $('cloud-refresh-button').disabled = running || !cloud.drive_configured;
-  } else {
-    badge.textContent = cloud.export_ready ? 'FILE READY'
-      : cloud.missing_underlyings?.length ? 'BSE INDEX DATA NEEDED'
-        : cloud.analysis_ready ? 'READY TO PREPARE' : state.counts.index_bars ? 'RUN ANALYSIS FIRST' : 'NO INDEX DATA';
-    badge.className = `state-badge ${cloud.export_ready ? 'up' : ''}`;
-    $('cloud-status').textContent = cloud.export_ready
-      ? `Prepared market file matches the current local data and analysis${cloud.last_export_through ? ` · through ${cloud.last_export_through}` : ''}. Download it and upload it as a separate index file in Google Drive.`
-      : cloud.missing_underlyings?.length
-        ? `Download BSE index OHLC from Data centre before preparing the seven-index Drive file. Missing: ${cloud.missing_underlyings.join(', ')}.`
+  if (hostedCopy) {
+    const taskLabel = job.kind === 'download' ? 'DOWNLOADING REPORTS'
+      : job.kind === 'analysis' ? 'RUNNING ANALYSIS'
+        : job.kind === 'cloud_export' ? 'PREPARING DRIVE FILE'
+          : job.kind === 'cloud_refresh' ? 'LOADING FROM DRIVE' : 'TASK RUNNING';
+    badge.textContent = running ? taskLabel
+      : cloud.export_ready ? 'DRIVE FILE READY'
+        : cloud.saved_through ? 'DRIVE COPY LOADED'
+          : cloud.drive_configured ? 'WAITING FOR DRIVE' : 'DRIVE SETUP NEEDED';
+    badge.className = `state-badge ${cloud.export_ready || cloud.saved_through ? 'up' : ''}`;
+    $('cloud-status').textContent = running
+      ? (job.message || 'The hosted data task is running…')
+      : cloud.export_ready
+        ? `A checked, index-only market file is ready${cloud.last_export_through ? ` through ${cloud.last_export_through}` : ''}. Download it, upload it to the same separate Drive file, then load the saved copy here.`
+        : cloud.missing_underlyings?.length
+          ? `Download BSE index OHLC from this Data centre before preparing the seven-index file. Missing: ${cloud.missing_underlyings.join(', ')}.`
+          : cloud.analysis_ready
+            ? 'The current market data and analysis are ready. Prepare and download the index-only ZIP, upload it to the separate Drive file, then load that saved copy here.'
+            : state.counts.index_bars
+              ? 'Market data is in this temporary Render copy. Run analysis, then prepare and download a Drive file before the hosted copy is restarted.'
+              : cloud.saved_through
+                ? `The hosted copy loaded the saved index data through ${cloud.saved_through}. You can download fresh NSE and BSE reports here, run analysis, and save a new Drive file.`
+                : cloud.drive_configured
+                  ? 'No saved market snapshot is loaded yet. Download reports here or load the configured Drive file.'
+                  : 'Download reports and run analysis here. Set the separate index ZIP file ID in Render settings to enable loading the saved Drive copy.';
+    return;
+  }
+
+  badge.textContent = cloud.export_ready ? 'FILE READY'
+    : cloud.missing_underlyings?.length ? 'BSE INDEX DATA NEEDED'
+      : cloud.analysis_ready ? 'READY TO PREPARE' : state.counts.index_bars ? 'RUN ANALYSIS FIRST' : 'NO INDEX DATA';
+  badge.className = `state-badge ${cloud.export_ready ? 'up' : ''}`;
+  $('cloud-status').textContent = cloud.export_ready
+    ? `Prepared market file matches the current local data and analysis${cloud.last_export_through ? ` · through ${cloud.last_export_through}` : ''}. Download it and upload it as a separate index file in Google Drive.`
+    : cloud.missing_underlyings?.length
+      ? `Download BSE index OHLC from Data centre before preparing the seven-index Drive file. Missing: ${cloud.missing_underlyings.join(', ')}.`
       : cloud.analysis_ready
         ? 'Local index data and analysis are ready. Prepare a fresh market file after each update, then download and upload it to Drive.'
         : cloud.export_reason || 'Download or import index data, then run analysis through the latest stored date.';
-    $('cloud-export-button').disabled = running || !cloud.analysis_ready || !!cloud.missing_underlyings?.length;
-    $('cloud-file-button').disabled = running || !cloud.export_ready;
-    $('cloud-file-button').textContent = cloud.export_ready ? `Download prepared market file (${cloud.export_mb} MB)` : 'Download prepared market file';
-  }
 }
 
 function renderAnalysis(analysis, job = {}, item = null) {

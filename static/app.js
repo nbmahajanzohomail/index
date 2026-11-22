@@ -8,6 +8,7 @@ let authToken = '';
 const tableSortState = new WeakMap();
 const authStorageKey = 'index-options-research-auth';
 let activeTouchTooltip = null;
+let historyTooltipLayer = null;
 
 function isTouchPointer(event) {
   return event.pointerType === 'touch'
@@ -447,6 +448,10 @@ function renderAnalysis(analysis, job = {}, item = null) {
 
 function renderHistoryChart(historyRows) {
   const host = $('analysis-chart-wrap');
+  if (historyTooltipLayer?.host === host) {
+    historyTooltipLayer.tooltip.remove();
+    historyTooltipLayer = null;
+  }
   if (activeTouchTooltip?.host === host) activeTouchTooltip = null;
   const rows = [...(historyRows || [])].filter((row) => row.day).reverse();
   if (!rows.length) {
@@ -546,10 +551,14 @@ function renderHistoryChart(historyRows) {
   bandEdges.forEach((band, index) => {
     svgParts.push(`<rect class="history-hit" data-history-index="${index}" x="${Math.max(left - 8, band.start)}" y="${top}" width="${Math.max(1, band.end - band.start)}" height="${plotBottom - top}"/>`);
   });
-  host.innerHTML = `<svg class="analysis-history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="One chart of index close on the left axis and PCR and futures open-interest percentage changes on the shared right axis">${svgParts.join('')}</svg><div class="history-tooltip" hidden></div>`;
+  host.innerHTML = `<svg class="analysis-history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="One chart of index close on the left axis and PCR and futures open-interest percentage changes on the shared right axis">${svgParts.join('')}</svg>`;
 
   const svg = host.querySelector('svg');
-  const tooltip = host.querySelector('.history-tooltip');
+  const tooltip = document.createElement('div');
+  tooltip.className = 'history-tooltip';
+  tooltip.hidden = true;
+  document.body.append(tooltip);
+  historyTooltipLayer = {host, tooltip};
   let touchPinned = false;
   host.querySelectorAll('[data-history-index]').forEach((hit) => {
     const show = (event, pinForTouch = false) => {
@@ -562,14 +571,19 @@ function renderHistoryChart(historyRows) {
         return `<span><i style="background:${item.color}"></i>${item.label}: <b>${shown}</b></span>`;
       }).join('')}`;
       tooltip.hidden = false;
-      const box = host.getBoundingClientRect();
       const bounds = tooltip.getBoundingClientRect();
-      const chartX = event.clientX - box.left;
-      const chartY = event.clientY - box.top;
-      tooltip.style.left = `${Math.max(8, Math.min(chartX + 14, box.width - bounds.width - 8))}px`;
-      const aboveFinger = chartY - bounds.height - 12;
-      const desiredY = pinForTouch && aboveFinger >= 8 ? aboveFinger : chartY + 12;
-      tooltip.style.top = `${Math.max(8, Math.min(desiredY, box.height - bounds.height - 8))}px`;
+      const pageX = Number.isFinite(event.pageX) ? event.pageX : event.clientX + window.scrollX;
+      const pageY = Number.isFinite(event.pageY) ? event.pageY : event.clientY + window.scrollY;
+      const viewportLeft = window.scrollX + 8;
+      const viewportTop = window.scrollY + 8;
+      const viewportRight = window.scrollX + (document.documentElement.clientWidth || window.innerWidth) - 8;
+      const viewportBottom = window.scrollY + (document.documentElement.clientHeight || window.innerHeight) - 8;
+      const maxLeft = Math.max(viewportLeft, viewportRight - bounds.width);
+      const maxTop = Math.max(viewportTop, viewportBottom - bounds.height);
+      tooltip.style.left = `${Math.max(viewportLeft, Math.min(pageX + 14, maxLeft))}px`;
+      const aboveFinger = pageY - bounds.height - 12;
+      const desiredY = pinForTouch && aboveFinger >= viewportTop ? aboveFinger : pageY + 12;
+      tooltip.style.top = `${Math.max(viewportTop, Math.min(desiredY, maxTop))}px`;
       touchPinned = pinForTouch;
     };
     hit.addEventListener('pointerenter', (event) => {

@@ -581,6 +581,9 @@ function renderHistoryChart(historyRows) {
       tooltip.innerHTML = `<strong>${esc(row.day)}</strong>${series.map((item) => {
         const value = row[item.key];
         const shown = value == null ? '—' : item.unit === '₹' ? `₹${num(value, item.digits)}` : `${signed(Number(value))}`;
+        if (item.key === 'futures_oi_5d_pct') {
+          return `<span><i style="background:${item.color}"></i>Nearest-expiry Futures OI: <b>${compact(row.futures_oi)}</b> (5D matched-expiry change: <b>${shown}</b>)</span>`;
+        }
         return `<span><i style="background:${item.color}"></i>${item.label}: <b>${shown}</b></span>`;
       }).join('')}`;
       tooltip.hidden = false;

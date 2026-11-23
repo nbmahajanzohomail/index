@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS index_bars(
   PRIMARY KEY(exchange, underlying, day)
 );
 CREATE INDEX IF NOT EXISTS index_bars_lookup ON index_bars(underlying, day);
+CREATE INDEX IF NOT EXISTS index_bars_revision_day ON index_bars(day, imported_at);
 CREATE TABLE IF NOT EXISTS option_bars(
   exchange TEXT NOT NULL, underlying TEXT NOT NULL, day TEXT NOT NULL,
   expiry TEXT NOT NULL, strike REAL NOT NULL, option_type TEXT NOT NULL,
@@ -94,6 +95,7 @@ CREATE TABLE IF NOT EXISTS option_bars(
   PRIMARY KEY(exchange, underlying, day, expiry, strike, option_type)
 );
 CREATE INDEX IF NOT EXISTS option_bars_lookup ON option_bars(underlying, day, expiry);
+CREATE INDEX IF NOT EXISTS option_bars_revision_day ON option_bars(day, imported_at);
 CREATE TABLE IF NOT EXISTS futures_bars(
   exchange TEXT NOT NULL, underlying TEXT NOT NULL, day TEXT NOT NULL,
   expiry TEXT NOT NULL, open REAL, high REAL, low REAL, close REAL NOT NULL,
@@ -102,6 +104,7 @@ CREATE TABLE IF NOT EXISTS futures_bars(
   PRIMARY KEY(exchange, underlying, day, expiry)
 );
 CREATE INDEX IF NOT EXISTS futures_bars_lookup ON futures_bars(underlying, day, expiry);
+CREATE INDEX IF NOT EXISTS futures_bars_revision_day ON futures_bars(day, imported_at);
 CREATE TABLE IF NOT EXISTS source_files(
   id INTEGER PRIMARY KEY, dataset TEXT NOT NULL, filename TEXT NOT NULL,
   imported_at TEXT NOT NULL, row_count INTEGER NOT NULL,
@@ -1076,11 +1079,11 @@ def save_forecast(c, forecast, revision=None):
     return row['id'] if row else None
 
 
-def mature_forecasts(c, through_day):
+def mature_forecasts(c, through_day, revision_cache=None):
     """Attach the first subsequently imported index session to each saved forecast."""
+    revision_cache = revision_cache if revision_cache is not None else {}
     rows = c.execute('''SELECT id,underlying,as_of,forecast_json FROM index_forecasts
         WHERE model_version=? AND as_of<? ORDER BY as_of,id''', (index_engine.MODEL_VERSION, through_day)).fetchall()
-    revisions = {}
     for saved in rows:
         next_bar = c.execute('''SELECT day,open,high,low,close FROM index_bars
             WHERE underlying=? AND day>? AND day<=? ORDER BY day LIMIT 1''',
@@ -1096,9 +1099,9 @@ def mature_forecasts(c, through_day):
         if not outcome:
             continue
         actual_day = next_bar['day']
-        if actual_day not in revisions:
-            revisions[actual_day] = data_revision(c, actual_day)
-        revision = revisions[actual_day]
+        if actual_day not in revision_cache:
+            revision_cache[actual_day] = data_revision(c, actual_day)
+        revision = revision_cache[actual_day]
         c.execute('''INSERT OR IGNORE INTO forecast_outcomes
             (forecast_id,actual_day,outcome,close_change_pct,range_pct,outcome_revision,created_at)
             VALUES(?,?,?,?,?,?,?)''',
@@ -1108,6 +1111,7 @@ def mature_forecasts(c, through_day):
 
 def run_analysis(as_of=None):
     as_of = parse_date(as_of, 'analysis cutoff') if as_of else dt.date.today().isoformat()
+    job_log(f'Preparing index OI history and forecasts through {as_of}…')
     with connect() as c:
         results = []
         for item in UNIVERSE:
@@ -1115,6 +1119,7 @@ def run_analysis(as_of=None):
             row['history'] = analysis_history(c, item, as_of, 2)
             row['forecast'] = index_engine.forecast(c, item, as_of)
             results.append(row)
+            job_log(f'{item["name"]} analysis complete · {len(row["history"])} history sessions.')
         available = [row for row in results if row['day']]
         if not available:
             raise ValueError('Import index OHLC data before running analysis.')
@@ -1132,7 +1137,8 @@ def run_analysis(as_of=None):
         latest_day = c.execute('SELECT MAX(day) FROM index_bars WHERE day<=?',
                                (dt.date.today().isoformat(),)).fetchone()[0]
         if as_of == latest_day:
-            mature_forecasts(c, as_of)
+            job_log('Updating saved next-session outcomes…')
+            mature_forecasts(c, as_of, revision_cache)
         revision = revision_cache.get(as_of) or data_revision(c, as_of)
         run_at = dt.datetime.now().astimezone().isoformat(timespec='seconds')
         c.execute('INSERT INTO analysis_runs(run_at,as_of,input_revision,results_json) VALUES(?,?,?,?)',
@@ -1183,6 +1189,7 @@ def _read_state(as_of=None):
         if selected_as_of > today:
             raise ValueError('Choose a research date on or before today.')
         indexes = [index_state(c, item, selected_as_of) for item in UNIVERSE]
+        revision_cache = {}
         for item, index in zip(UNIVERSE, indexes):
             index['forecast'] = None
             if not index.get('day'):
@@ -1192,7 +1199,9 @@ def _read_state(as_of=None):
                 (item['underlying'], index['day'], index_engine.MODEL_VERSION)).fetchone()
             if saved:
                 forecast = json.loads(saved['forecast_json'])
-                forecast['stale'] = saved['input_revision'] != data_revision(c, index['day'])
+                if index['day'] not in revision_cache:
+                    revision_cache[index['day']] = data_revision(c, index['day'])
+                forecast['stale'] = saved['input_revision'] != revision_cache[index['day']]
                 outcome = c.execute('''SELECT actual_day,outcome,close_change_pct,range_pct
                     FROM forecast_outcomes WHERE forecast_id=? AND actual_day<=? ORDER BY id DESC LIMIT 1''',
                     (saved['id'], selected_as_of)).fetchone()
@@ -1211,7 +1220,10 @@ def _read_state(as_of=None):
         files = [dict(r) for r in c.execute('SELECT dataset,filename,imported_at,row_count,first_day,last_day FROM source_files ORDER BY id DESC LIMIT 100')]
         available_days = [row['day'] for row in indexes if row['day']]
         analysis_as_of = max(available_days, default=None)
-        revision = data_revision(c, analysis_as_of or selected_as_of)
+        revision_day = analysis_as_of or selected_as_of
+        if revision_day not in revision_cache:
+            revision_cache[revision_day] = data_revision(c, revision_day)
+        revision = revision_cache[revision_day]
         analysis_row = c.execute('SELECT run_at,as_of,input_revision,results_json FROM analysis_runs WHERE as_of=? ORDER BY id DESC LIMIT 1',
                                  (analysis_as_of,)).fetchone() if analysis_as_of else None
         analysis = None
@@ -1228,7 +1240,10 @@ def _read_state(as_of=None):
             if saved_evaluation:
                 evaluation = json.loads(saved_evaluation['evaluation_json'])
                 evaluation['run_at'] = saved_evaluation['run_at']
-                evaluation['stale'] = saved_evaluation['input_revision'] != data_revision(c, evaluation['as_of'])
+                evaluation_day = evaluation['as_of']
+                if evaluation_day not in revision_cache:
+                    revision_cache[evaluation_day] = data_revision(c, evaluation_day)
+                evaluation['stale'] = saved_evaluation['input_revision'] != revision_cache[evaluation_day]
                 evaluations[item['underlying']] = evaluation
         database_path = DB_PATH.stat().st_size if DB_PATH.exists() else 0
         job = get_job()
